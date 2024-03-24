@@ -15,3 +15,7 @@ diff-metadata-localsrcinfos pkg crate:
     diff -u --color=always \
         <(jq -S '.packages[] | select(.name == "{{ crate }}")' "{{ pkg }}.cargo-metadata.json") \
         <(jq -S '."{{ crate }}"' "{{ pkg }}.localsrcinfos.json")
+
+smoketest:
+    just localsrcinfos fd
+    just diff-metadata-localsrcinfos fd fd-find

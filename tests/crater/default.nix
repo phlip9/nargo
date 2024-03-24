@@ -136,11 +136,11 @@
     target,
     # The dependency kind (normal, dev, build)
     kind,
-  }: name: v: {
+  }: name: dep: {
     name = name;
     target = target;
-    features = v.features or [];
-    optional = v.optional or false;
+    features = dep.features or [];
+    optional = dep.optional or false;
 
     kind =
       if kind == "normal"
@@ -152,9 +152,9 @@
     req = let
       version =
         # The dep body can be just the version string, ex: `tokio = "1.0"`.
-        if isString v
-        then v
-        else v.version or null;
+        if isString dep
+        then dep
+        else dep.version or null;
       firstChar = substring 0 1 version;
       # ex: "1.0.34" is a 'bare' semver that should be translated to "^1.0.34"
       isBareSemver = (match "[[:digit:]]" firstChar) != null;
@@ -169,32 +169,32 @@
     # It's `default-features` in Cargo.toml, but `default_features` in index and in pkg info.
     # Name here is `uses_default_features` to match `cargo metadata` output.
     uses_default_features =
-      warnIf (v ? default_features) "Ignoring `default_features`. Do you mean `default-features`?"
-      (v.default-features or true);
+      warnIf (dep ? default_features) "Ignoring `default_features`. Do you mean `default-features`?"
+      (dep.default-features or true);
 
     # See `sanitizeDep`
     rename =
-      if (v.package or null) != null
+      if (dep.package or null) != null
       then replaceStrings ["-"] ["_"] name
       else null;
 
     # This is used for dependency resolving inside Cargo.lock.
     source =
-      if v ? registry
+      if dep ? registry
       then throw "Dependency with `registry` is not supported. Use `registry-index` with explicit URL instead."
-      else if v ? registry-index
-      then "registry+${v.registry-index}"
-      else if v ? git
+      else if dep ? registry-index
+      then "registry+${dep.registry-index}"
+      else if dep ? git
       then
         # For v1 and v2, git-branch URLs are encoded as "git+url" with no query parameters.
-        if v ? branch && lockVersion >= 3
-        then "git+${v.git}?branch=${v.branch}"
-        else if v ? tag
-        then "git+${v.git}?tag=${v.tag}"
-        else if v ? rev
-        then "git+${v.git}?rev=${v.rev}"
-        else "git+${v.git}"
-      else if v ? path
+        if dep ? branch && lockVersion >= 3
+        then "git+${dep.git}?branch=${dep.branch}"
+        else if dep ? tag
+        then "git+${dep.git}?tag=${dep.tag}"
+        else if dep ? rev
+        then "git+${dep.git}?rev=${dep.rev}"
+        else "git+${dep.git}"
+      else if dep ? path
       then
         # Local crates are mark with `null` source.
         null
@@ -221,19 +221,12 @@
   #   []
   #   fn;
 
-  # Build a simplified crate into from a parsed Cargo.toml.
-  mkManifestfromCargoToml = {
-    lockVersion ? 3,
-    package,
-    features ? {},
-    # ex:
-    # ```toml
-    # [target.'cfg(all(target_os = "linux", target_env = "musl")'.dependencies]
-    # libc = "1.2.3"
-    # ```
-    target ? {},
-    ...
-  } @ cargoToml: src: let
+  # Metadata for a single package's Cargo.toml inside a cargo workspace.
+  mkPkgManifest = {
+    lockVersion,
+    cargoToml,
+    source,
+  }: let
     transDeps = {
       target,
       kind,
@@ -271,7 +264,7 @@
       # standard [dependencies], [dev-dependencies], and [build-dependencies]
       (collectTargetDeps null cargoToml)
       # dependencies with `target.'cfg(...)'` constraints.
-      (mapAttrsToList collectTargetDeps target)
+      (mapAttrsToList collectTargetDeps (cargoToml.target or {}))
     ];
 
     # Add the "dep:<crate>" pseudo-features for optional dependencies.
@@ -287,15 +280,41 @@
         in
           features // {${name} = ["dep:${name}"];};
     in
-      foldl' maybeAddOptionalFeature features dependencies;
+      foldl' maybeAddOptionalFeature (cargoToml.features or {}) dependencies;
+
+    package = cargoToml.package;
   in {
     name = package.name;
     version = package.version;
-    src = src;
+    id = "${package.name} ${package.version} (path+file://${source})";
+
+    dependencies = dependencies;
     features = featuresWithOptionalDepFeatuers;
     links = package.links or null;
-    procMacro = cargoToml.lib.proc-macro or false;
-    dependencies = dependencies;
+    source = null;
+
+    # procMacro = cargoToml.lib.proc-macro or false;
+
+    # cargo defaults to "2015" if missing, for backwards compat.
+    edition = package.edition or "2015";
+
+    # Extra fields needed to match `cargo metadata` output.
+    authors = package.authors or [];
+    categories = package.categories or [];
+    default_run = package.default-run or null;
+    description = package.description or null;
+    documentation = package.documentation or null;
+    homepage = package.homepage or null;
+    keywords = package.keywords or [];
+    license = package.license or null;
+    license_file = package.license-file or null;
+    metadata = package.metadata or null;
+    publish = package.publish or null;
+    readme = package.readme or null;
+    repository = package.repository or null;
+    rust_version = package.rust-version or null;
+
+    manifest_path = "${source}/Cargo.toml";
   };
   # resolveDepsFromLock
 in {
@@ -335,11 +354,21 @@ in {
       listToAttrs
       (map (
           relativePath: let
-            memberRoot = "${src}/${relativePath}";
-            memberCargoToml = fromTOML (readFile "${memberRoot}/Cargo.toml") // lockVersionSet;
+            # Path to cargo workspace member's directory.
+            memberSource =
+              if relativePath == ""
+              then src
+              else "${src}/${relativePath}";
+
+            memberCargoToml = fromTOML (readFile "${memberSource}/Cargo.toml");
+            memberManifest = mkPkgManifest {
+              inherit (lockVersionSet) lockVersion;
+              cargoToml = memberCargoToml;
+              source = memberSource;
+            };
           in {
             name = toPkgId memberCargoToml.package;
-            value = mkManifestfromCargoToml memberCargoToml memberRoot;
+            value = memberManifest;
           }
         ) (
           if manifest ? workspace
