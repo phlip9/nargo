@@ -16,6 +16,13 @@ diff-metadata-manifests pkg crate:
         <(jq -S '.packages[] | select(.name == "{{ crate }}")' "{{ pkg }}.cargo-metadata.json") \
         <(jq -S '."{{ crate }}"' "{{ pkg }}.workspace-manifests.json")
 
+smoketest-pkg pkg crate:
+    just metadata {{ pkg }}
+    just workspace-manifests {{ pkg }}
+    just diff-metadata-manifests {{ pkg }} {{ crate }}
+
 smoketest:
-    just workspace-manifests fd
-    just diff-metadata-manifests fd fd-find
+    # just smoketest-pkg features simple-features
+    # just smoketest-pkg fd fd-find
+    # just smoketest-pkg workspace-inline bar
+    just smoketest-pkg pkg-targets pkg-targets
