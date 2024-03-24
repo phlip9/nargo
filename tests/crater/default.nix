@@ -221,7 +221,8 @@
   #   []
   #   fn;
 
-  # Metadata for a single package's Cargo.toml inside a cargo workspace.
+  # Parse a package manifest (metadata) for a single package's Cargo.toml inside
+  # the cargo workspace directory.
   mkPkgManifest = {
     lockVersion,
     cargoToml,
@@ -316,7 +317,85 @@
 
     manifest_path = "${source}/Cargo.toml";
   };
+
+  # Parse package manifests all local crates inside the workspace.
+  mkWorkspacePkgManifests = {
+    src ? throw "require package src",
+    cargoToml ? fromTOML (readFile "${src}/Cargo.toml"),
+    cargoLock ? fromTOML (readFile "${src}/Cargo.lock"),
+  }: let
+    # Collect workspace packages from workspace Cargo.toml.
+    selected = flatten (map (glob: globMatchDir glob src) cargoToml.workspace.members);
+    excluded = map sanitizeRelativePath (cargoToml.workspace.exclude or []);
+    workspaceMemberPaths = subtractLists excluded selected;
+
+    # We don't distinguish between v1 and v2. But v3 is different from both.
+    lockVersion = cargoLock.version or 3;
+
+    # Package manifests for local crates inside the workspace.
+    workspacePkgManifests =
+      listToAttrs
+      (map (
+          relativePath: let
+            # Path to cargo workspace member's directory.
+            memberSource =
+              if relativePath == ""
+              then src
+              else "${src}/${relativePath}";
+
+            memberCargoToml = fromTOML (readFile "${memberSource}/Cargo.toml");
+            memberManifest = mkPkgManifest {
+              inherit lockVersion;
+              cargoToml = memberCargoToml;
+              source = memberSource;
+            };
+          in {
+            name = toPkgId memberCargoToml.package;
+            value = memberManifest;
+          }
+        ) (
+          if cargoToml ? workspace
+          then workspaceMemberPaths
+          else [""] # top-level crate
+        ));
+  in
+    workspacePkgManifests;
+  #
   # resolveDepsFromLock
+  #
+  # gitSrcInfos = {}; # : Attrset PkgInfo
+  # registries = {}; # : Attrset Registry
+  #
+  # getPkgInfo = {
+  #   source ? null,
+  #   name,
+  #   version,
+  #   ...
+  # } @ args: let
+  #   m = match "(registry|git)\\+([^#]*).*" source;
+  #   kind = elemAt m 0;
+  #   url = elemAt m 1;
+  # in
+  #   # Local crates have no `source`.
+  #   if source == null
+  #   then
+  #     localSrcInfos.${toPkgId args}
+  #     or (throw "Local crate is outside the workspace: ${toPkgId args}")
+  #     // {isLocalPkg = true;}
+  #   else if m == null
+  #   then throw "Invalid source: ${source}"
+  #   else if kind == "registry"
+  #   then
+  #     getPkgInfoFromIndex
+  #     (registries.${url}
+  #       or (throw "Registry `${url}` not found. Please define it in `extraRegistries`."))
+  #     args
+  #     // {inherit source;} # `source` is for crate id, which is used for overrides.
+  #   else if kind == "git"
+  #   then
+  #     gitSrcInfos.${url}
+  #     or (throw "Git source `${url}` not found. Please define it in `gitSrcs`.")
+  #   else throw "Invalid source: ${source}";
 in {
   # foo = pkgInfo;
   #
@@ -340,74 +419,6 @@ in {
 
     unitGraph = cargoUnitGraph {inherit pkgs name src;};
 
-    manifest = fromTOML (readFile (src + "/Cargo.toml"));
-    lock = fromTOML (readFile (src + "/Cargo.lock"));
-    # We don't distinguish between v1 and v2. But v3 is different from both.
-    lockVersionSet = {lockVersion = lock.version or 3;};
-
-    selected = flatten (map (glob: globMatchDir glob src) manifest.workspace.members);
-    excluded = map sanitizeRelativePath (manifest.workspace.exclude or []);
-    workspaceMemberPaths = subtractLists excluded selected;
-
-    # localSrcInfos : Attrset PkgInfo
-    localSrcInfos =
-      listToAttrs
-      (map (
-          relativePath: let
-            # Path to cargo workspace member's directory.
-            memberSource =
-              if relativePath == ""
-              then src
-              else "${src}/${relativePath}";
-
-            memberCargoToml = fromTOML (readFile "${memberSource}/Cargo.toml");
-            memberManifest = mkPkgManifest {
-              inherit (lockVersionSet) lockVersion;
-              cargoToml = memberCargoToml;
-              source = memberSource;
-            };
-          in {
-            name = toPkgId memberCargoToml.package;
-            value = memberManifest;
-          }
-        ) (
-          if manifest ? workspace
-          then workspaceMemberPaths
-          else [""] # top-level crate
-        ));
-
-    gitSrcInfos = {}; # : Attrset PkgInfo
-    registries = {}; # : Attrset Registry
-
-    getPkgInfo = {
-      source ? null,
-      name,
-      version,
-      ...
-    } @ args: let
-      m = match "(registry|git)\\+([^#]*).*" source;
-      kind = elemAt m 0;
-      url = elemAt m 1;
-    in
-      # Local crates have no `source`.
-      if source == null
-      then
-        localSrcInfos.${toPkgId args}
-        or (throw "Local crate is outside the workspace: ${toPkgId args}")
-        // {isLocalPkg = true;}
-      else if m == null
-      then throw "Invalid source: ${source}"
-      else if kind == "registry"
-      then
-        getPkgInfoFromIndex
-        (registries.${url}
-          or (throw "Registry `${url}` not found. Please define it in `extraRegistries`."))
-        args
-        // {inherit source;} # `source` is for crate id, which is used for overrides.
-      else if kind == "git"
-      then
-        gitSrcInfos.${url}
-        or (throw "Git source `${url}` not found. Please define it in `gitSrcs`.")
-      else throw "Invalid source: ${source}";
+    workspacePkgManifests = mkWorkspacePkgManifests {src = src;};
   };
 }

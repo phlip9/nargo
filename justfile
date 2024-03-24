@@ -5,17 +5,17 @@ metadata pkg:
         | tee /dev/stderr \
         > "{{ pkg }}.cargo-metadata.json"
 
-localsrcinfos pkg:
-    nix eval --json --read-only --show-trace .#crater.x86_64-linux."{{ pkg }}".localSrcInfos \
+workspace-manifests pkg:
+    nix eval --json --read-only --show-trace .#crater.x86_64-linux."{{ pkg }}".workspacePkgManifests \
         | jq -S . \
         | tee /dev/stderr \
-        > "{{ pkg }}.localsrcinfos.json"
+        > "{{ pkg }}.workspace-manifests.json"
 
-diff-metadata-localsrcinfos pkg crate:
+diff-metadata-manifests pkg crate:
     diff -u --color=always \
         <(jq -S '.packages[] | select(.name == "{{ crate }}")' "{{ pkg }}.cargo-metadata.json") \
-        <(jq -S '."{{ crate }}"' "{{ pkg }}.localsrcinfos.json")
+        <(jq -S '."{{ crate }}"' "{{ pkg }}.workspace-manifests.json")
 
 smoketest:
-    just localsrcinfos fd
-    just diff-metadata-localsrcinfos fd fd-find
+    just workspace-manifests fd
+    just diff-metadata-manifests fd fd-find
