@@ -12,13 +12,10 @@
     all
     baseNameOf
     concatLists
-    concatMap
-    elemAt
     filter
     foldl'
-    mapAttrs
-    match
     fromTOML
+    match
     pathExists
     readDir
     readFile
@@ -26,7 +23,6 @@
     ;
   inherit
     (lib)
-    assertMsg
     flatten
     foldlAttrs
     hasSuffix
@@ -35,14 +31,44 @@
     mapAttrsToList
     mapNullable
     optional
+    optionalAttrs
     removeSuffix
     replaceStrings
     subtractLists
     warnIf
     ;
-  inherit (nocargo-lib.pkg-info) getPkgInfoFromIndex toPkgId;
+  inherit (nocargo-lib.pkg-info) toPkgId;
   inherit (nocargo-lib.glob) globMatchDir;
   inherit (nocargo-lib.support) sanitizeRelativePath;
+
+  # dbg = x: builtins.trace x x;
+  # dbgJson = x: builtins.trace (builtins.toJSON x) x;
+
+  # filterMap = fn: xs:
+  #   foldl'
+  #   (xs: y: let
+  #     x = fn y;
+  #   in
+  #     if x != null
+  #     then xs ++ x
+  #     else xs)
+  #   []
+  #   fn;
+
+  # onlyIf = pred: x:
+  #   if pred x
+  #   then x
+  #   else null;
+
+  # optionToList = x:
+  #   if x != null
+  #   then [x]
+  #   else [];
+
+  orElse = x: y:
+    if x != null
+    then x
+    else y;
 
   # defaultRegistries = {
   #   "https://github.com/rust-lang/crates.io-index" =
@@ -52,13 +78,7 @@
   #     (import ../../crates-io-override {inherit lib pkgs;});
   # };
 
-  # cargoToml = fromTOML (readFile "${src}/Cargo.toml");
-  # pkgInfo = mkPkgInfoFromCargoToml cargoToml "<src>";
-
-  # fd = nocargo-lib.mkRustPackageOrWorkspace {
-  #   src = ;
-  # };
-
+  # Run `cargo metadata` on a crate or workspace in `src`.
   cargoMetadata = {
     pkgs,
     src,
@@ -83,6 +103,7 @@
         > $out
     '';
 
+  # Run `cargo tree` on a crate or workspace in `src`.
   cargoTree = {
     pkgs,
     src,
@@ -104,11 +125,11 @@
         --frozen --offline --locked \
         --manifest-path="${src}/Cargo.toml" \
         --target="${pkgs.stdenv.hostPlatform.rust.rustcTarget}" \
-        --package=fd-find \
         --edges=normal,build,features \
         > $out
     '';
 
+  # Run `cargo build --unit-graph` on a crate or workspace in `src`.
   cargoUnitGraph = {
     pkgs,
     src,
@@ -231,23 +252,7 @@
     # package = v.package or name;
   };
 
-  # dbg = x: builtins.trace x x;
-  dbgJson = x: builtins.trace (builtins.toJSON x) x;
-
-  # filterMap = fn: xs:
-  #   foldl'
-  #   (xs: y: let
-  #     x = fn y;
-  #   in
-  #     if x != null
-  #     then xs ++ x
-  #     else xs)
-  #   []
-  #   fn;
-
-  # targetsFromSubdir :: Path -> String -> Attrset
-  #
-  # See: <https://doc.rust-lang.org/cargo/guide/project-layout.html#package-layout>
+  # inferredTargetsFromSubdir :: Path -> String -> List({ name: String, path: String })
   inferredTargetsFromSubdir = source: dir: let
     subdirPath = source + "/${dir}";
   in
@@ -279,19 +284,16 @@
           else acc
       ) [] (readDir subdirPath);
 
-  # inferredBinTargets = source: name:
-  #   (inferredTargetsFromSubdir source "src/bin")
-  #   ++ (optional (pathExists (source + "/src/main.rs")) {
-  #     name = name;
-  #     path = "src/main.rs";
-  #   });
-
+  # inferredFileTarget :: Path -> String -> String -> List({ name: String, path: String })
   inferredFileTarget = source: name: filepath:
     optional (pathExists (source + "/" + filepath)) {
       name = name;
       path = filepath;
     };
 
+  # Infer the standard cargo package targets for a given target kind.
+  #
+  # See: <https://doc.rust-lang.org/cargo/guide/project-layout.html#package-layout>
   inferredKindTargets = source: name: kind:
     if kind == "lib"
     then inferredFileTarget source name "src/lib.rs"
@@ -307,82 +309,7 @@
     then inferredTargetsFromSubdir source "benches"
     else throw "nocargo: unrecognized crate target kind: ${kind}";
 
-  # inferredTargetsFromPkgSrc = cargoToml: source:
-  #   concatLists [
-  #     (optional (pathExists (source + "/src/lib.rs")) {
-  #       name = cargoToml.package.name;
-  #       path = "src/lib.rs";
-  #     })
-  #     (optional (pathExists (source + "/src/main.rs")) {
-  #       name = cargoToml.package.name;
-  #       path = "src/main.rs";
-  #     })
-  #     (optional (pathExists (source + "/build.rs")) {
-  #       name = "build-script-build";
-  #       path = "build.rs";
-  #     })
-  #     (inferredTargetsFromSubdir source "src/bin")
-  #     (inferredTargetsFromSubdir source "tests")
-  #     (inferredTargetsFromSubdir source "examples")
-  #     (inferredTargetsFromSubdir source "benches")
-  #   ];
-
-  onlyIf = pred: x:
-    if pred x
-    then x
-    else null;
-
-  orElse = x: y:
-    if x != null
-    then x
-    else y;
-
-  # pub struct TomlTarget {
-  #     pub name: Option<String>,
-  #
-  #     // The intention was to only accept `crate-type` here but historical
-  #     // versions of Cargo also accepted `crate_type`, so look for both.
-  #     pub crate_type: Option<Vec<String>>,
-  #     #[serde(rename = "crate_type")]
-  #     pub crate_type2: Option<Vec<String>>,
-  #
-  #     pub path: Option<PathValue>,
-  #     // Note that `filename` is used for the cargo-feature `different_binary_name`
-  #     pub filename: Option<String>,
-  #     pub test: Option<bool>,
-  #     pub doctest: Option<bool>,
-  #     pub bench: Option<bool>,
-  #     pub doc: Option<bool>,
-  #     pub plugin: Option<bool>,
-  #     pub doc_scrape_examples: Option<bool>,
-  #     pub proc_macro: Option<bool>,
-  #     #[serde(rename = "proc_macro")]
-  #     pub proc_macro2: Option<bool>,
-  #     pub harness: Option<bool>,
-  #     pub required_features: Option<Vec<String>>,
-  #     pub edition: Option<String>,
-  # }
-
-  # struct SerializedTarget<'a> {
-  #     /// Is this a `--bin bin`, `--lib`, `--example ex`?
-  #     /// Serialized as a list of strings for historical reasons.
-  #     kind: &'a TargetKind,
-  #     /// Corresponds to `--crate-type` compiler attribute.
-  #     /// See <https://doc.rust-lang.org/reference/linkage.html>
-  #     crate_types: Vec<CrateType>,
-  #     name: &'a str,
-  #     src_path: Option<&'a PathBuf>,
-  #     edition: &'a str,
-  #     #[serde(rename = "required-features", skip_serializing_if = "Option::is_none")]
-  #     required_features: Option<Vec<&'a str>>,
-  #     /// Whether docs should be built for the target via `cargo doc`
-  #     /// See <https://doc.rust-lang.org/cargo/commands/cargo-doc.html#target-selection>
-  #     doc: bool,
-  #     doctest: bool,
-  #     /// Whether tests should be run for the target (`test` field in `Cargo.toml`)
-  #     test: bool,
-  # }
-
+  # Default target settings for each target kind.
   pkgTargetDefaults = {
     lib = {
       doc = true;
@@ -422,6 +349,9 @@
     };
   };
 
+  # "deserialize" a full package target spec from a partial `tomlTarget`. This
+  # involves filling in missing values with defaults and making the target file
+  # path absolute.
   deserializeTomlPkgTarget = {
     source,
     edition,
@@ -429,51 +359,26 @@
     tomlTarget,
   }: let
     default = pkgTargetDefaults.${kind};
-  in {
-    kind = [kind];
-    name = tomlTarget.name or null;
-    src_path = mapNullable (path: source + "/${path}") (tomlTarget.path or null);
-
-    crate_types =
-      if kind == "lib" && (tomlTarget.proc-macro or false)
-      then ["proc-macro"]
-      else tomlTarget.crate-types or tomlTarget.crate_types or default.crate_types;
-
-    edition = tomlTarget.edition or edition;
-    # # TODO(phlip9): check subset of available features
-    # required_features = tomlTarget.required-features or [];
-    doc = tomlTarget.doc or default.doc;
-    doctest = tomlTarget.doctest or default.doctest;
-    test = tomlTarget.test or default.test;
-  };
-
-  # -> Option<Attrset>
-  mkPkgLibTarget = {
-    source,
-    edition,
-    # Cargo.toml package name with all "-" replaced w/ "_".
-    name,
-    # Option<Attrset>
-    tomlTarget,
-  }: let
-    kind = "lib";
-
-    inferredTargetPath = onlyIf pathExists (source + "/src/lib.rs");
-
-    cleanedTomlTarget = deserializeTomlPkgTarget {
-      inherit source edition kind tomlTarget;
-    };
-
-    target =
-      cleanedTomlTarget
-      // {
-        name = orElse cleanedTomlTarget.name name;
-        src_path = orElse cleanedTomlTarget.src_path inferredTargetPath;
-      };
   in
-    if target.src_path == null
-    then null
-    else assert assertMsg (pathExists target.src_path) "failed to locate crate lib: ${target.src_path}"; target;
+    {
+      kind = [kind];
+      name = tomlTarget.name or null;
+      src_path = mapNullable (path: source + "/${path}") (tomlTarget.path or null);
+
+      crate_types =
+        if kind == "lib" && (tomlTarget.proc-macro or false)
+        then ["proc-macro"]
+        else tomlTarget.crate-types or tomlTarget.crate_types or default.crate_types;
+
+      edition = tomlTarget.edition or edition;
+      doc = tomlTarget.doc or default.doc;
+      doctest = tomlTarget.doctest or default.doctest;
+      test = tomlTarget.test or default.test;
+    }
+    // optionalAttrs (tomlTarget ? required-features) {
+      # TODO(phlip9): check subset of available features
+      required_features = tomlTarget.required-features;
+    };
 
   mkPkgKindTargets = {
     source,
@@ -512,6 +417,10 @@
     then inferredTargets
     else cleanedTomlTargets ++ remainingInferredTargets;
 
+  # Collect package targets (lib, bins, examples, tests, benches) from the
+  # package's directory layout.
+  #
+  # See: <https://doc.rust-lang.org/cargo/reference/cargo-targets.html#target-auto-discovery>
   mkPkgTargets = {
     source,
     edition,
@@ -570,67 +479,6 @@
         ];
       })
     ];
-
-  # optionToList = x:
-  #   if x != null
-  #   then [x]
-  #   else [];
-
-  # mkPkgTargets = {
-  #   cargoToml,
-  #   source,
-  #   edition,
-  #   features,
-  #   # kind,
-  #   # relPath,
-  #   # name,
-  # }: let
-  #   # path = source + "/${relPath}";
-  #   autobenches = cargoToml.autobenches ? true;
-  #   autobins = cargoToml.autobins ? true;
-  #   autoexamples = cargoToml.autoexamples ? true;
-  #   autotests = cargoToml.autotests ? true;
-  #
-  #   # maybe path to build.rs buildscript
-  #   custom_build = cargoToml.build ? null;
-  #
-  #   # # crate names inside targets use snake case
-  #   # name = replaceStrings ["-"] ["_"] cargoToml.package.name;
-  #
-  #   name = cargoToml.package.name;
-  #
-  #   libTarget = mkPkgLibTarget {
-  #     inherit source edition name;
-  #     tomlTarget = cargoToml.lib or null;
-  #   };
-  # in (optionToList libTarget);
-
-  # Collect package targets (lib, bins, examples, tests, benches) from the
-  # package's directory layout.
-  #
-  # See: <https://doc.rust-lang.org/cargo/reference/cargo-targets.html#target-auto-discovery>
-  pkgTargetAutoDiscovery = source: {
-    autobins ? true,
-    autoexamples ? true,
-    autotests ? true,
-    autobenches ? true,
-  }: {
-    crate_types = ["lib"];
-    doc = true;
-    doctest = true;
-    test = true;
-
-    # name = "foo"           # The name of the target.
-    # path = "src/lib.rs"    # The source file of the target.
-    # bench = true           # Is benchmarked by default.
-    # doc = true             # Is documented by default.
-    # plugin = false         # Used as a compiler plugin (deprecated).
-    # proc-macro = false     # Set to `true` for a proc-macro library.
-    # harness = true         # Use libtest harness.
-    # edition = "2015"       # The edition of the target.
-    # crate-type = ["lib"]   # The crate types to generate.
-    # required-features = [] # Features required to build this target (N/A for lib).
-  };
 
   # Parse a package manifest (metadata) for a single package's Cargo.toml inside
   # the cargo workspace directory.
@@ -831,7 +679,7 @@ in {
 
   pkg-targets = mkSmoketest {src = ../pkg-targets;};
 
-  foo = inferredTargetsFromSubdir ../pkg-targets "src/bin";
+  # foo = inferredTargetsFromSubdir ../pkg-targets "src/bin";
   # bar = inferredTargetsFromPkgSrc (fromTOML (readFile ../pkg-targets/Cargo.toml)) ../pkg-targets;
 
   fd = mkSmoketest {
