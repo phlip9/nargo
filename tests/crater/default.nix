@@ -12,11 +12,10 @@
     all
     baseNameOf
     concatLists
-    filter
     foldl'
     fromTOML
-    isBool
     match
+    partition
     pathExists
     readDir
     readFile
@@ -391,7 +390,6 @@
     };
 
   # Make the full package target set for a specific target kind.
-  # Targets specified in the
   mkPkgKindTargets = {
     source,
     edition,
@@ -400,6 +398,8 @@
     autodiscover,
     tomlTargets,
   }: let
+    # Automatically inferred targets for this target kind.
+    # ex: src/lib.rs, src/main.rs, src/bin/mybin.rs, etc...
     inferredTargets =
       if autodiscover
       then inferredKindTargets source name kind
@@ -407,22 +407,31 @@
 
     # TODO(phlip9): optimize? doing a lot of O(N) list searching here...
 
-    # all inferred targets that have no Cargo.toml targets touching them
-    remainingInferredTargets =
-      # short circuit for common case of no specified targets
+    split =
+      # short circuit for common case of no toml-specified targets
       if tomlTargets == null || tomlTargets == []
-      then inferredTargets
+      then {
+        right = inferredTargets;
+        wrong = [];
+      }
       else
-        # otherwise we need to ignore inferred targets that have any Cargo.toml
-        # targets covering them
-        filter (
+        # otherwise partition inferred targets into...
+        partition (
           inferredTarget:
             all (
-              tomlTarget: (inferredTarget.name != (tomlTarget.name or null)) && (inferredTarget.path != (tomlTarget.path or null))
+              tomlTarget:
+                (inferredTarget.name != (tomlTarget.name or null)) && (inferredTarget.path != (tomlTarget.path or null))
             )
             tomlTargets
         )
         inferredTargets;
+
+    # ...inferred targets that have no Cargo.toml targets touching them. These
+    # just get passed through.
+    remainingInferredTargets = split.right;
+    # ...and inferred targets that have corresponding Cargo.toml targets and
+    # need to be merged with them.
+    toMergeInferredTargets = split.wrong;
 
     cleanedRemainingInferredTargets =
       map (tomlTarget: deserializeTomlPkgTarget {inherit source edition name kind tomlTarget;})
@@ -436,7 +445,7 @@
             inferred: inferred.name == tomlTarget.name || inferred.path == tomlTarget.path
           )
           {}
-          inferredTargets;
+          toMergeInferredTargets;
       in
         deserializeTomlPkgTarget {
           inherit source edition name kind;
@@ -588,7 +597,6 @@
     links = package.links or null;
     source = null;
 
-    # targets = mkPkgTargets2 {inherit cargoToml source edition features;};
     targets = mkPkgTargets {inherit source edition cargoToml;};
 
     # procMacro = cargoToml.lib.proc-macro or false;
