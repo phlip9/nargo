@@ -9,6 +9,7 @@
 
   inherit
     (builtins)
+    all
     baseNameOf
     concatLists
     elemAt
@@ -32,7 +33,7 @@
     listToAttrs
     mapAttrsToList
     mapNullable
-    optionalAttrs
+    optional
     removeSuffix
     replaceStrings
     subtractLists
@@ -230,7 +231,7 @@
   };
 
   # dbg = x: builtins.trace x x;
-  # dbgJson = x: builtins.trace (builtins.toJSON x) x;
+  dbgJson = x: builtins.trace (builtins.toJSON x) x;
 
   # filterMap = fn: xs:
   #   foldl'
@@ -243,7 +244,87 @@
   #   []
   #   fn;
 
-  # pkgTargetAutoDiscoveryPaths =
+  # targetsFromSubdir :: Path -> String -> Attrset
+  #
+  # See: <https://doc.rust-lang.org/cargo/guide/project-layout.html#package-layout>
+  inferredTargetsFromSubdir = source: dir: let
+    subdirPath = source + "/${dir}";
+  in
+    if !pathExists subdirPath
+    then []
+    else
+      foldlAttrs (
+        acc: name: kind: let
+          # ex: src/bin/mybin.rs
+          topLevel = "${dir}/${name}";
+          isTopLevelTarget = kind == "regular" && hasSuffix ".rs" name;
+          topLevelTarget = {
+            name = removeSuffix ".rs" name;
+            path = topLevel;
+          };
+
+          # ex: src/bin/mybin/main.rs
+          subdirMain = "${dir}/${name}/main.rs";
+          isSubdirTarget = kind == "directory" && (pathExists (source + "/${subdirMain}"));
+          subdirTarget = {
+            name = name;
+            path = subdirMain;
+          };
+        in
+          if isTopLevelTarget
+          then acc ++ [topLevelTarget]
+          else if isSubdirTarget
+          then acc ++ [subdirTarget]
+          else acc
+      ) [] (readDir subdirPath);
+
+  # inferredBinTargets = source: name:
+  #   (inferredTargetsFromSubdir source "src/bin")
+  #   ++ (optional (pathExists (source + "/src/main.rs")) {
+  #     name = name;
+  #     path = "src/main.rs";
+  #   });
+
+  inferredFileTarget = source: name: filepath:
+    optional (pathExists (source + "/" + filepath)) {
+      name = name;
+      path = filepath;
+    };
+
+  inferredKindTargets = source: name: kind:
+    if kind == "lib"
+    then inferredFileTarget source name "src/lib.rs"
+    else if kind == "custom-build"
+    then inferredFileTarget source "build-script-build" "build.rs"
+    else if kind == "bin"
+    then (inferredFileTarget source name "src/main.rs") ++ (inferredTargetsFromSubdir source "src/bin")
+    else if kind == "test"
+    then inferredTargetsFromSubdir source "tests"
+    else if kind == "example"
+    then inferredTargetsFromSubdir source "examples"
+    else if kind == "bench"
+    then inferredTargetsFromSubdir source "benches"
+    else throw "nocargo: unrecognized crate target kind: ${kind}";
+
+  # inferredTargetsFromPkgSrc = cargoToml: source:
+  #   concatLists [
+  #     (optional (pathExists (source + "/src/lib.rs")) {
+  #       name = cargoToml.package.name;
+  #       path = "src/lib.rs";
+  #     })
+  #     (optional (pathExists (source + "/src/main.rs")) {
+  #       name = cargoToml.package.name;
+  #       path = "src/main.rs";
+  #     })
+  #     (optional (pathExists (source + "/build.rs")) {
+  #       name = "build-script-build";
+  #       path = "build.rs";
+  #     })
+  #     (inferredTargetsFromSubdir source "src/bin")
+  #     (inferredTargetsFromSubdir source "tests")
+  #     (inferredTargetsFromSubdir source "examples")
+  #     (inferredTargetsFromSubdir source "benches")
+  #   ];
 
   onlyIf = pred: x:
     if pred x
@@ -372,27 +453,63 @@
     # Cargo.toml package name with all "-" replaced w/ "_".
     name,
     # Option<Attrset>
-    tomlLib,
+    tomlTarget,
   }: let
     kind = "lib";
 
-    inferredLibPath = onlyIf pathExists (source + "/src/lib.rs");
+    inferredTargetPath = onlyIf pathExists (source + "/src/lib.rs");
 
-    tomlLibDeser = deserializeTomlPkgTarget {
-      inherit source edition kind;
-      tomlTarget = tomlLib;
+    cleanedTomlTarget = deserializeTomlPkgTarget {
+      inherit source edition kind tomlTarget;
     };
 
-    lib =
-      tomlLibDeser
+    target =
+      cleanedTomlTarget
       // {
-        name = orElse tomlLibDeser.name name;
-        src_path = orElse tomlLibDeser.src_path inferredLibPath;
+        name = orElse cleanedTomlTarget.name name;
+        src_path = orElse cleanedTomlTarget.src_path inferredTargetPath;
       };
   in
-    if lib.src_path == null
+    if target.src_path == null
     then null
-    else assert assertMsg (pathExists lib.src_path) "failed to locate crate lib: ${lib.src_path}"; lib;
+    else assert assertMsg (pathExists target.src_path) "failed to locate crate lib: ${target.src_path}"; target;
+
+  mkPkgKindTargets = {
+    source,
+    edition,
+    name,
+    autodiscover,
+    kind,
+    tomlTargets,
+  }: let
+    inferred =
+      if autodiscover
+      then inferredKindTargets source name kind
+      else [];
+
+    inferredTargets =
+      map (tomlTarget: deserializeTomlPkgTarget {inherit source edition kind tomlTarget;})
+      inferred;
+
+    # ignore inferred targets that have any Cargo.toml targets covering them
+    remainingInferredTargets =
+      filter (
+        inferredTarget:
+          all (
+            tomlTarget:
+              (inferredTarget.name != tomlTarget.name)
+              && (inferredTarget.path != tomlTarget.path)
+          )
+      )
+      inferredTargets;
+
+    cleanedTomlTargets = map (
+      tomlTarget: deserializeTomlPkgTarget {inherit source edition kind tomlTarget;}
+    ) (orElse tomlTargets []);
+  in
+    if tomlTargets == null || tomlTargets == []
+    then inferredTargets
+    else cleanedTomlTargets ++ remainingInferredTargets;
 
   optionToList = x:
     if x != null
@@ -424,43 +541,9 @@
 
     libTarget = mkPkgLibTarget {
       inherit source edition name;
-      tomlLib = cargoToml.lib or null;
+      tomlTarget = cargoToml.lib or null;
     };
   in (optionToList libTarget);
-
-  # targetsFromSubdir :: Path -> String -> Attrset
-  #
-  # See: <https://doc.rust-lang.org/cargo/guide/project-layout.html#package-layout>
-  targetsFromSubdir = source: dir: let
-    subdirPath = source + "/${dir}";
-  in
-    if !pathExists subdirPath
-    then {}
-    else
-      foldlAttrs (
-        acc: name: kind: let
-          # ex: src/bin/mybin.rs
-          topLevel = "${dir}/${name}";
-          isTopLevelTarget = kind == "regular" && hasSuffix ".rs" name;
-          # ex: src/bin/mybin/main.rs
-          subdirMain = "${dir}/${name}/main.rs";
-          isSubdirTarget = kind == "directory" && (pathExists (source + "/${subdirMain}"));
-        in
-          if isTopLevelTarget
-          then acc // {${topLevel} = {name = removeSuffix ".rs" name;};}
-          else if isSubdirTarget
-          then (acc // {${subdirMain} = {name = name;};})
-          else acc
-      ) {} (readDir subdirPath);
-
-  targetsFromPkgSrc = cargoToml: source:
-    optionalAttrs (pathExists (source + "/src/lib.rs")) {"src/lib.rs" = {name = cargoToml.package.name;};}
-    // optionalAttrs (pathExists (source + "/src/main.rs")) {"src/main.rs" = {name = cargoToml.package.name;};}
-    // optionalAttrs (pathExists (source + "/build.rs")) {"build.rs" = {name = "build-script-build";};}
-    // targetsFromSubdir source "src/bin"
-    // targetsFromSubdir source "tests"
-    // targetsFromSubdir source "examples"
-    // targetsFromSubdir source "benches";
 
   # Collect package targets (lib, bins, examples, tests, benches) from the
   # package's directory layout.
@@ -569,6 +652,17 @@
     source = null;
 
     targets = mkPkgTargets {inherit cargoToml source edition features;};
+    targets2 = mkPkgKindTargets {
+      inherit source edition;
+      name = package.name;
+      autodiscover = true;
+      kind = "lib";
+      tomlTargets = dbgJson (
+        if cargoToml ? lib
+        then [cargoToml.lib]
+        else []
+      );
+    };
 
     # procMacro = cargoToml.lib.proc-macro or false;
 
@@ -687,8 +781,8 @@ in {
 
   pkg-targets = mkSmoketest {src = ../pkg-targets;};
 
-  foo = targetsFromSubdir ../pkg-targets "src/bin";
-  bar = targetsFromPkgSrc (fromTOML (readFile ../pkg-targets/Cargo.toml)) ../pkg-targets;
+  foo = inferredTargetsFromSubdir ../pkg-targets "src/bin";
+  # bar = inferredTargetsFromPkgSrc (fromTOML (readFile ../pkg-targets/Cargo.toml)) ../pkg-targets;
 
   fd = mkSmoketest {
     name = "fd";
