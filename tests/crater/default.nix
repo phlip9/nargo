@@ -15,6 +15,7 @@
     filter
     foldl'
     fromTOML
+    isBool
     match
     pathExists
     readDir
@@ -355,14 +356,21 @@
   deserializeTomlPkgTarget = {
     source,
     edition,
+    name,
     kind,
     tomlTarget,
   }: let
     default = pkgTargetDefaults.${kind};
+    # tomlTargetPath = tomlTarget.path or throw "nocargo: missing path for cargo target: (${kind})"
   in
     {
       kind = [kind];
-      name = tomlTarget.name or null;
+
+      # target name is required for all target kinds except `lib`
+      name =
+        if kind != "lib"
+        then tomlTarget.name
+        else tomlTarget.name or name;
       src_path = mapNullable (path: source + "/${path}") (tomlTarget.path or null);
 
       crate_types =
@@ -380,6 +388,8 @@
       required_features = tomlTarget.required-features;
     };
 
+  # Make the full package target set for a specific target kind.
+  # Targets specified in the
   mkPkgKindTargets = {
     source,
     edition,
@@ -394,7 +404,7 @@
       else [];
 
     inferredTargets =
-      map (tomlTarget: deserializeTomlPkgTarget {inherit source edition kind tomlTarget;})
+      map (tomlTarget: deserializeTomlPkgTarget {inherit source edition name kind tomlTarget;})
       inferred;
 
     # ignore inferred targets that have any Cargo.toml targets covering them
@@ -410,7 +420,7 @@
       inferredTargets;
 
     cleanedTomlTargets = map (
-      tomlTarget: deserializeTomlPkgTarget {inherit source edition kind tomlTarget;}
+      tomlTarget: deserializeTomlPkgTarget {inherit source edition name kind tomlTarget;}
     ) (orElse tomlTargets []);
   in
     if tomlTargets == null || tomlTargets == []
@@ -470,13 +480,13 @@
       (mkPkgKindTargets {
         inherit source edition name;
         kind = "custom-build";
-        autodiscover = false;
-        tomlTargets = [
-          {
-            name = "build-script-build";
-            path = cargoToml.bin or "build.rs";
-          }
-        ];
+        # this looks weird, but `build` can be missing (enable autodiscover) a
+        # boolean (maybe autodiscover), or a string path (disable autodiscover).
+        autodiscover = (cargoToml.build or true) == true;
+        tomlTargets = optional (cargoToml ? build && isString cargoToml.build) {
+          name = "build-script-build";
+          path = cargoToml.build;
+        };
       })
     ];
 
@@ -625,7 +635,7 @@
         ));
   in
     workspacePkgManifests;
-  #
+
   # resolveDepsFromLock
   #
   # gitSrcInfos = {}; # : Attrset PkgInfo
