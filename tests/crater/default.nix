@@ -324,9 +324,9 @@
   # inferredTargetsFromSubdir :: Path -> String -> List({ name: String, path: String })
   #
   # Search for automatic inferred cargo targets in a subdirectory. Effectively
-  # the globs: `$source/$dir/*.rs` and `$source/$dir/*/main.rs`.
-  inferredTargetsFromSubdir = source: dir: let
-    subdirPath = source + "/${dir}";
+  # the globs: `$src/$dir/*.rs` and `$src/$dir/*/main.rs`.
+  inferredTargetsFromSubdir = src: dir: let
+    subdirPath = src + "/${dir}";
   in
     if !pathExists subdirPath
     then []
@@ -343,7 +343,7 @@
 
           # ex: src/bin/mybin/main.rs
           subdirMain = "${dir}/${name}/main.rs";
-          isSubdirTarget = kind == "directory" && (pathExists (source + "/${subdirMain}"));
+          isSubdirTarget = kind == "directory" && (pathExists (src + "/${subdirMain}"));
           subdirTarget = {
             name = name;
             path = subdirMain;
@@ -357,8 +357,8 @@
       ) [] (readDir subdirPath);
 
   # inferredFileTarget :: Path -> String -> String -> List({ name: String, path: String })
-  inferredFileTarget = source: name: filepath:
-    optional (pathExists (source + "/" + filepath)) {
+  inferredFileTarget = src: name: filepath:
+    optional (pathExists (src + "/" + filepath)) {
       name = name;
       path = filepath;
     };
@@ -366,19 +366,19 @@
   # Infer the standard cargo package targets for a given target kind.
   #
   # See: <https://doc.rust-lang.org/cargo/guide/project-layout.html#package-layout>
-  inferredKindTargets = source: name: kind:
+  inferredKindTargets = src: name: kind:
     if kind == "lib"
-    then inferredFileTarget source name "src/lib.rs"
+    then inferredFileTarget src name "src/lib.rs"
     else if kind == "custom-build"
-    then inferredFileTarget source "build-script-build" "build.rs"
+    then inferredFileTarget src "build-script-build" "build.rs"
     else if kind == "bin"
-    then (inferredFileTarget source name "src/main.rs") ++ (inferredTargetsFromSubdir source "src/bin")
+    then (inferredFileTarget src name "src/main.rs") ++ (inferredTargetsFromSubdir src "src/bin")
     else if kind == "test"
-    then inferredTargetsFromSubdir source "tests"
+    then inferredTargetsFromSubdir src "tests"
     else if kind == "example"
-    then inferredTargetsFromSubdir source "examples"
+    then inferredTargetsFromSubdir src "examples"
     else if kind == "bench"
-    then inferredTargetsFromSubdir source "benches"
+    then inferredTargetsFromSubdir src "benches"
     else throw "nocargo: unrecognized crate target kind: ${kind}";
 
   # Default target settings for each target kind.
@@ -425,7 +425,7 @@
   # involves filling in missing values with defaults and making the target file
   # path absolute.
   deserializeTomlPkgTarget = {
-    source,
+    src,
     edition,
     name,
     kind,
@@ -442,7 +442,7 @@
         if kind != "lib"
         then tomlTarget.name
         else tomlTarget.name or name;
-      src_path = mapNullable (path: source + "/${path}") (tomlTarget.path or null);
+      src_path = mapNullable (path: src + "/${path}") (tomlTarget.path or null);
 
       crate_types =
         if kind == "lib" && (tomlTarget.proc-macro or false)
@@ -461,7 +461,7 @@
 
   # Make the full package target set for a specific target kind.
   mkPkgKindTargets = {
-    source,
+    src,
     edition,
     name,
     kind,
@@ -472,7 +472,7 @@
     # ex: src/lib.rs, src/main.rs, src/bin/mybin.rs, etc...
     inferredTargets =
       if autodiscover
-      then inferredKindTargets source name kind
+      then inferredKindTargets src name kind
       else [];
 
     # TODO(phlip9): optimize? doing a lot of O(N) list searching here...
@@ -504,7 +504,7 @@
     toMergeInferredTargets = split.wrong;
 
     cleanedRemainingInferredTargets =
-      map (tomlTarget: deserializeTomlPkgTarget {inherit source edition name kind tomlTarget;})
+      map (tomlTarget: deserializeTomlPkgTarget {inherit src edition name kind tomlTarget;})
       remainingInferredTargets;
 
     cleanedTomlTargets = map (
@@ -518,7 +518,7 @@
           toMergeInferredTargets;
       in
         deserializeTomlPkgTarget {
-          inherit source edition name kind;
+          inherit src edition name kind;
           tomlTarget = inferredTarget // tomlTarget;
         }
     ) (orElse tomlTargets []);
@@ -530,7 +530,7 @@
   #
   # See: <https://doc.rust-lang.org/cargo/reference/cargo-targets.html#target-auto-discovery>
   mkPkgTargets = {
-    source,
+    src,
     edition,
     cargoToml,
   }: let
@@ -546,37 +546,37 @@
     # output ordering: [lib bin example test bench build].
     concatLists [
       (mkPkgKindTargets {
-        inherit source edition name;
+        inherit src edition name;
         kind = "lib";
         autodiscover = true;
         tomlTargets = tomlTargetLib;
       })
       (mkPkgKindTargets {
-        inherit source edition name;
+        inherit src edition name;
         kind = "bin";
         autodiscover = cargoToml.autobins or true;
         tomlTargets = cargoToml.bin or [];
       })
       (mkPkgKindTargets {
-        inherit source edition name;
+        inherit src edition name;
         kind = "example";
         autodiscover = cargoToml.autoexamples or true;
         tomlTargets = cargoToml.example or [];
       })
       (mkPkgKindTargets {
-        inherit source edition name;
+        inherit src edition name;
         kind = "test";
         autodiscover = cargoToml.autotests or true;
         tomlTargets = cargoToml.test or [];
       })
       (mkPkgKindTargets {
-        inherit source edition name;
+        inherit src edition name;
         kind = "bench";
         autodiscover = cargoToml.autobenches or true;
         tomlTargets = cargoToml.bench or [];
       })
       (mkPkgKindTargets {
-        inherit source edition name;
+        inherit src edition name;
         kind = "custom-build";
         # this looks weird, but `build` can be missing (enable autodiscover) a
         # boolean (maybe autodiscover), or a string path (disable autodiscover).
@@ -594,8 +594,8 @@
   # See: <https://doc.rust-lang.org/cargo/reference/manifest.html>
   mkPkgManifest = {
     lockVersion,
+    src,
     cargoToml,
-    source,
   }: let
     collectTargetDeps = target: {
       dependencies ? {},
@@ -652,7 +652,7 @@
     links = package.links or null;
     source = null;
 
-    targets = mkPkgTargets {inherit source edition cargoToml;};
+    targets = mkPkgTargets {inherit src edition cargoToml;};
 
     # Extra fields needed to match `cargo metadata` output.
     authors = package.authors or [];
@@ -691,16 +691,16 @@
       (map (
           relativePath: let
             # Path to cargo workspace member's directory.
-            memberSource =
+            memberSrc =
               if relativePath == ""
               then src
               else src + "/${relativePath}";
 
-            memberCargoToml = fromTOML (readFile (memberSource + "/Cargo.toml"));
+            memberCargoToml = fromTOML (readFile (memberSrc + "/Cargo.toml"));
             memberManifest = mkPkgManifest {
               inherit lockVersion;
+              src = memberSrc;
               cargoToml = memberCargoToml;
-              source = memberSource;
             };
           in {
             name = toPkgId memberCargoToml.package;
