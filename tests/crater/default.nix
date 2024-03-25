@@ -12,6 +12,7 @@
     all
     baseNameOf
     concatLists
+    concatMap
     elemAt
     filter
     foldl'
@@ -395,7 +396,7 @@
       test = true;
       crate_types = ["bin"];
     };
-    build = {
+    custom-build = {
       doc = false;
       doctest = false;
       test = false;
@@ -478,8 +479,8 @@
     source,
     edition,
     name,
-    autodiscover,
     kind,
+    autodiscover,
     tomlTargets,
   }: let
     inferred =
@@ -511,39 +512,98 @@
     then inferredTargets
     else cleanedTomlTargets ++ remainingInferredTargets;
 
-  optionToList = x:
-    if x != null
-    then [x]
-    else [];
-
   mkPkgTargets = {
-    cargoToml,
     source,
     edition,
-    features,
-    # kind,
-    # relPath,
-    # name,
+    cargoToml,
   }: let
-    # path = source + "/${relPath}";
-    autobenches = cargoToml.autobenches ? true;
-    autobins = cargoToml.autobins ? true;
-    autoexamples = cargoToml.autoexamples ? true;
-    autotests = cargoToml.autotests ? true;
-
-    # maybe path to build.rs buildscript
-    custom_build = cargoToml.build ? null;
-
-    # # crate names inside targets use snake case
-    # name = replaceStrings ["-"] ["_"] cargoToml.package.name;
-
+    # kinds = ["lib" "bin" "custom-build" "test" "example" "bench"];
     name = cargoToml.package.name;
 
-    libTarget = mkPkgLibTarget {
-      inherit source edition name;
-      tomlTarget = cargoToml.lib or null;
-    };
-  in (optionToList libTarget);
+    tomlTargetLib =
+      if cargoToml ? lib
+      then [cargoToml.lib]
+      else [];
+  in
+    # Note: order is important
+    # lib bin example test bench build
+    concatLists [
+      (mkPkgKindTargets {
+        inherit source edition name;
+        kind = "lib";
+        autodiscover = true;
+        tomlTargets = tomlTargetLib;
+      })
+      (mkPkgKindTargets {
+        inherit source edition name;
+        kind = "bin";
+        autodiscover = cargoToml.autobins or true;
+        tomlTargets = cargoToml.bin or [];
+      })
+      (mkPkgKindTargets {
+        inherit source edition name;
+        kind = "example";
+        autodiscover = cargoToml.autoexamples or true;
+        tomlTargets = cargoToml.example or [];
+      })
+      (mkPkgKindTargets {
+        inherit source edition name;
+        kind = "test";
+        autodiscover = cargoToml.autotests or true;
+        tomlTargets = cargoToml.test or [];
+      })
+      (mkPkgKindTargets {
+        inherit source edition name;
+        kind = "bench";
+        autodiscover = cargoToml.autobenches or true;
+        tomlTargets = cargoToml.bench or [];
+      })
+      (mkPkgKindTargets {
+        inherit source edition name;
+        kind = "custom-build";
+        autodiscover = false;
+        tomlTargets = [
+          {
+            name = "build-script-build";
+            path = cargoToml.bin or "build.rs";
+          }
+        ];
+      })
+    ];
+
+  # optionToList = x:
+  #   if x != null
+  #   then [x]
+  #   else [];
+
+  # mkPkgTargets = {
+  #   cargoToml,
+  #   source,
+  #   edition,
+  #   features,
+  #   # kind,
+  #   # relPath,
+  #   # name,
+  # }: let
+  #   # path = source + "/${relPath}";
+  #   autobenches = cargoToml.autobenches ? true;
+  #   autobins = cargoToml.autobins ? true;
+  #   autoexamples = cargoToml.autoexamples ? true;
+  #   autotests = cargoToml.autotests ? true;
+  #
+  #   # maybe path to build.rs buildscript
+  #   custom_build = cargoToml.build ? null;
+  #
+  #   # # crate names inside targets use snake case
+  #   # name = replaceStrings ["-"] ["_"] cargoToml.package.name;
+  #
+  #   name = cargoToml.package.name;
+  #
+  #   libTarget = mkPkgLibTarget {
+  #     inherit source edition name;
+  #     tomlTarget = cargoToml.lib or null;
+  #   };
+  # in (optionToList libTarget);
 
   # Collect package targets (lib, bins, examples, tests, benches) from the
   # package's directory layout.
@@ -651,18 +711,8 @@
     links = package.links or null;
     source = null;
 
-    targets = mkPkgTargets {inherit cargoToml source edition features;};
-    targets2 = mkPkgKindTargets {
-      inherit source edition;
-      name = package.name;
-      autodiscover = true;
-      kind = "lib";
-      tomlTargets = dbgJson (
-        if cargoToml ? lib
-        then [cargoToml.lib]
-        else []
-      );
-    };
+    # targets = mkPkgTargets2 {inherit cargoToml source edition features;};
+    targets = mkPkgTargets {inherit source edition cargoToml;};
 
     # procMacro = cargoToml.lib.proc-macro or false;
 
