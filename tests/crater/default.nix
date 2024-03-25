@@ -24,6 +24,8 @@
     ;
   inherit
     (lib)
+    assertMsg
+    findFirst
     flatten
     foldlAttrs
     hasSuffix
@@ -43,7 +45,7 @@
   inherit (nocargo-lib.support) sanitizeRelativePath;
 
   # dbg = x: builtins.trace x x;
-  # dbgJson = x: builtins.trace (builtins.toJSON x) x;
+  dbgJson = x: builtins.trace (builtins.toJSON x) x;
 
   # filterMap = fn: xs:
   #   foldl'
@@ -398,34 +400,51 @@
     autodiscover,
     tomlTargets,
   }: let
-    inferred =
+    inferredTargets =
       if autodiscover
       then inferredKindTargets source name kind
       else [];
 
-    inferredTargets =
-      map (tomlTarget: deserializeTomlPkgTarget {inherit source edition name kind tomlTarget;})
-      inferred;
+    # TODO(phlip9): optimize? doing a lot of O(N) list searching here...
 
-    # ignore inferred targets that have any Cargo.toml targets covering them
+    # all inferred targets that have no Cargo.toml targets touching them
     remainingInferredTargets =
-      filter (
-        inferredTarget:
-          all (
-            tomlTarget:
-              (inferredTarget.name != tomlTarget.name)
-              && (inferredTarget.path != tomlTarget.path)
-          )
-      )
-      inferredTargets;
+      # short circuit for common case of no specified targets
+      if tomlTargets == null || tomlTargets == []
+      then inferredTargets
+      else
+        # otherwise we need to ignore inferred targets that have any Cargo.toml
+        # targets covering them
+        filter (
+          inferredTarget:
+            all (
+              tomlTarget: (inferredTarget.name != (tomlTarget.name or null)) && (inferredTarget.path != (tomlTarget.path or null))
+            )
+            tomlTargets
+        )
+        inferredTargets;
+
+    cleanedRemainingInferredTargets =
+      map (tomlTarget: deserializeTomlPkgTarget {inherit source edition name kind tomlTarget;})
+      remainingInferredTargets;
 
     cleanedTomlTargets = map (
-      tomlTarget: deserializeTomlPkgTarget {inherit source edition name kind tomlTarget;}
+      tomlTarget: let
+        # Find any matching inferred target with the same name or path.
+        inferredTarget = assert assertMsg (tomlTarget ? name || tomlTarget ? path) "nocargo: cargo target must have a name or path";
+          findFirst (
+            inferred: inferred.name == tomlTarget.name || inferred.path == tomlTarget.path
+          )
+          {}
+          inferredTargets;
+      in
+        deserializeTomlPkgTarget {
+          inherit source edition name kind;
+          tomlTarget = inferredTarget // tomlTarget;
+        }
     ) (orElse tomlTargets []);
   in
-    if tomlTargets == null || tomlTargets == []
-    then inferredTargets
-    else cleanedTomlTargets ++ remainingInferredTargets;
+    cleanedRemainingInferredTargets ++ cleanedTomlTargets;
 
   # Collect package targets (lib, bins, examples, tests, benches) from the
   # package's directory layout.
@@ -457,7 +476,7 @@
         inherit source edition name;
         kind = "bin";
         autodiscover = cargoToml.autobins or true;
-        tomlTargets = cargoToml.bin or [];
+        tomlTargets = dbgJson (cargoToml.bin or []);
       })
       (mkPkgKindTargets {
         inherit source edition name;
