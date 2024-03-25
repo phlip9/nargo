@@ -20,7 +20,6 @@
     readDir
     readFile
     substring
-    toFile
     toJSON
     ;
   inherit
@@ -47,7 +46,7 @@
   inherit (nocargo-lib.support) sanitizeRelativePath;
 
   # dbg = x: builtins.trace x x;
-  dbgJson = x: builtins.trace (builtins.toJSON x) x;
+  # dbgJson = x: builtins.trace (builtins.toJSON x) x;
 
   # filterMap = fn: xs:
   #   foldl'
@@ -323,6 +322,9 @@
   };
 
   # inferredTargetsFromSubdir :: Path -> String -> List({ name: String, path: String })
+  #
+  # Search for automatic inferred cargo targets in a subdirectory. Effectively
+  # the globs: `$source/$dir/*.rs` and `$source/$dir/*/main.rs`.
   inferredTargetsFromSubdir = source: dir: let
     subdirPath = source + "/${dir}";
   in
@@ -540,8 +542,8 @@
       then [cargoToml.lib]
       else [];
   in
-    # Note: order is important
-    # lib bin example test bench build
+    # Note: the list ordering is important. We want to match `cargo metadata`'s
+    # output ordering: [lib bin example test bench build].
     concatLists [
       (mkPkgKindTargets {
         inherit source edition name;
@@ -595,47 +597,31 @@
     cargoToml,
     source,
   }: let
-    transDeps = {
-      target,
-      kind,
-      deps,
-    }:
-      mapAttrsToList
-      (mkManifestDependency {inherit lockVersion target kind;})
-      deps;
-
     collectTargetDeps = target: {
       dependencies ? {},
       dev-dependencies ? {},
       build-dependencies ? {},
       ...
     }: let
-      deps = transDeps {
-        inherit target;
-        kind = "normal";
-        deps = dependencies;
-      };
-      devDeps = transDeps {
-        inherit target;
-        kind = "dev";
-        deps = dev-dependencies;
-      };
-      buildDeps = transDeps {
-        inherit target;
-        kind = "build";
-        deps = build-dependencies;
-      };
+      transDeps = kind: deps:
+        mapAttrsToList (mkManifestDependency {inherit lockVersion target kind;}) deps;
+
+      deps = transDeps "normal" dependencies;
+      devDeps = transDeps "dev" dev-dependencies;
+      buildDeps = transDeps "build" build-dependencies;
     in
       concatLists [deps devDeps buildDeps];
 
-    dependencies = flatten [
+    # Collect and flatten all direct dependencies of this crate into a list.
+    dependencies =
       # standard [dependencies], [dev-dependencies], and [build-dependencies]
       (collectTargetDeps null cargoToml)
+      ++
       # dependencies with `target.'cfg(...)'` constraints.
-      (mapAttrsToList collectTargetDeps (cargoToml.target or {}))
-    ];
+      concatLists (mapAttrsToList collectTargetDeps (cargoToml.target or {}));
 
-    # Add the "dep:<crate>" pseudo-features for optional dependencies.
+    # Build the [features] mapping. Also adds the "dep:<crate>" pseudo-features
+    # for optional dependencies.
     features = let
       maybeAddOptionalFeature = feats: dep:
         if !dep.optional
@@ -657,7 +643,8 @@
   in {
     name = package.name;
     version = package.version;
-    id = "${package.name} ${package.version} (path+file://${source})";
+    id = "${package.name} ${package.version} (path+file://${src})";
+    manifest_path = src + "/Cargo.toml";
 
     edition = edition;
     dependencies = dependencies;
@@ -666,8 +653,6 @@
     source = null;
 
     targets = mkPkgTargets {inherit source edition cargoToml;};
-
-    # procMacro = cargoToml.lib.proc-macro or false;
 
     # Extra fields needed to match `cargo metadata` output.
     authors = package.authors or [];
@@ -684,8 +669,6 @@
     readme = package.readme or null;
     repository = package.repository or null;
     rust_version = package.rust-version or null;
-
-    manifest_path = "${source}/Cargo.toml";
   };
 
   # Parse package manifests all local crates inside the workspace.
