@@ -20,6 +20,8 @@
     readDir
     readFile
     substring
+    toFile
+    toJSON
     ;
   inherit
     (lib)
@@ -28,6 +30,7 @@
     flatten
     foldlAttrs
     hasSuffix
+    isDerivation
     isString
     listToAttrs
     mapAttrsToList
@@ -85,18 +88,18 @@
     pkgs,
     src,
     name,
-  }: let
-    cargoLock = "${src}/Cargo.lock";
-    cargoVendorDir = craneLib.vendorCargoDeps {inherit cargoLock;};
-  in
-    pkgs.runCommandLocal "${name}.cargo-metadata.json" {} ''
+  }:
+    pkgs.runCommandLocal "${name}.cargo-metadata.json" {
+      nativeBuildInputs = [pkgs.cargo];
+      cargoVendorDir = craneLib.vendorCargoDeps {cargoLock = "${src}/Cargo.lock";};
+    } ''
       export CARGO_TARGET_DIR="$PWD/target"
 
       export CARGO_HOME=$PWD/.cargo-home
       mkdir -p $CARGO_HOME
-      cp ${cargoVendorDir}/config.toml $CARGO_HOME/config.toml
+      cp $cargoVendorDir/config.toml $CARGO_HOME/config.toml
 
-      ${pkgs.cargo}/bin/cargo metadata \
+      cargo metadata \
         -vv \
         --format-version=1 \
         --frozen --offline --locked \
@@ -110,19 +113,18 @@
     pkgs,
     src,
     name,
-  }: let
-    cargoLock = "${src}/Cargo.lock";
-    cargoVendorDir = craneLib.vendorCargoDeps {inherit cargoLock;};
-  in
-    pkgs.runCommandLocal "${name}.cargo-tree" {} ''
+  }:
+    pkgs.runCommandLocal "${name}.cargo-tree" {
+      nativeBuildInputs = [pkgs.cargo];
+      cargoVendorDir = craneLib.vendorCargoDeps {cargoLock = "${src}/Cargo.lock";};
+    } ''
       export CARGO_TARGET_DIR="$PWD/target"
 
       export CARGO_HOME=$PWD/.cargo-home
       mkdir -p $CARGO_HOME
-      cp ${cargoVendorDir}/config.toml $CARGO_HOME/config.toml
+      cp $cargoVendorDir/config.toml $CARGO_HOME/config.toml
 
-      # --target=aarch64-unknown-linux-gnu
-      ${pkgs.cargo}/bin/cargo tree \
+      cargo tree \
         -vv \
         --frozen --offline --locked \
         --manifest-path="${src}/Cargo.toml" \
@@ -136,19 +138,19 @@
     pkgs,
     src,
     name,
-  }: let
-    cargoLock = "${src}/Cargo.lock";
-    cargoVendorDir = craneLib.vendorCargoDeps {inherit cargoLock;};
-  in
-    pkgs.runCommandLocal "${name}.cargo-unit-graph.json" {} ''
+  }:
+    pkgs.runCommandLocal "${name}.cargo-unit-graph.json" {
+      nativeBuildInputs = [pkgs.cargo];
+      cargoVendorDir = craneLib.vendorCargoDeps {cargoLock = "${src}/Cargo.lock";};
+    } ''
       export CARGO_TARGET_DIR="$PWD/target"
 
       export CARGO_HOME=$PWD/.cargo-home
       mkdir -p $CARGO_HOME
-      cp ${cargoVendorDir}/config.toml $CARGO_HOME/config.toml
+      cp $cargoVendorDir/config.toml $CARGO_HOME/config.toml
 
       # --target=aarch64-unknown-linux-gnu
-      ${pkgs.cargo}/bin/cargo build \
+      cargo build \
         -vv \
         --frozen --offline --locked \
         --manifest-path="${src}/Cargo.toml" \
@@ -159,6 +161,72 @@
         --unit-graph \
         > $out
     '';
+
+  assertJsonDrvEq = {
+    name ? "assert",
+    json1,
+    jq1 ? ".",
+    json2,
+    jq2 ? ".",
+  }: let
+    toJsonDrv = json:
+      if isDerivation json
+      then json
+      else toJSON json;
+  in
+    pkgs.runCommandLocal "${name}-assert" {
+      nativeBuildInputs = [pkgs.diffutils pkgs.jq];
+      json1 = toJsonDrv json1;
+      json2 = toJsonDrv json2;
+      passAsFile =
+        (optional (!isDerivation json1) "json1")
+        ++ (optional (!isDerivation json2) "json2");
+      jq1 = jq1;
+      jq2 = jq2;
+    } ''
+      [[ -n "$json1Path" ]] && export json1=$json1Path
+      [[ -n "$json2Path" ]] && export json2=$json2Path
+
+      {
+        diff -u --color=always \
+          <(jq -S "$jq1" "$json1") \
+          <(jq -S "$jq2" "$json2")
+      } || {
+        echo "json1 != json2."
+        echo ""
+        echo "json1 path: '$json1'"
+        echo "json2 path: '$json2'"
+        echo "jq1 selector: '$jq1'"
+        echo "jq2 selector: '$jq2'"
+        echo ""
+        echo "retry locally with:"
+        echo ""
+        echo "\$ diff -u --color=always <(jq -S '$jq1' '$json1') <(jq -S '$jq2' '$json2')"
+        echo ""
+        exit 1
+      }
+
+      touch $out
+    '';
+
+  mkSmoketest = {
+    src,
+    name ? baseNameOf src,
+    pkg-name ? name,
+  }:
+    (src: rec {
+      metadata = cargoMetadata {inherit pkgs name src;};
+      tree = cargoTree {inherit pkgs name src;};
+      unitGraph = cargoUnitGraph {inherit pkgs name src;};
+      workspacePkgManifests = mkWorkspacePkgManifests {src = src;};
+      diffPkgManifests = assertJsonDrvEq {
+        name = "${name}-${pkg-name}";
+        json1 = metadata;
+        jq1 = ''.packages[] | select(.name == "${pkg-name}")'';
+        json2 = workspacePkgManifests;
+        jq2 = ''."${pkg-name}"'';
+      };
+    }) "${src}"; # hack to make evaluation and derivation use same dir
 
   # A parsed dependency from a Cargo.toml manifest.
   #
@@ -485,7 +553,7 @@
         inherit source edition name;
         kind = "bin";
         autodiscover = cargoToml.autobins or true;
-        tomlTargets = dbgJson (cargoToml.bin or []);
+        tomlTargets = cargoToml.bin or [];
       })
       (mkPkgKindTargets {
         inherit source edition name;
@@ -662,7 +730,6 @@
         ));
   in
     workspacePkgManifests;
-
   # resolveDepsFromLock
   #
   # gitSrcInfos = {}; # : Attrset PkgInfo
@@ -698,29 +765,22 @@
   #     gitSrcInfos.${url}
   #     or (throw "Git source `${url}` not found. Please define it in `gitSrcs`.")
   #   else throw "Invalid source: ${source}";
-
-  mkSmoketest = {
-    src,
-    name ? baseNameOf src,
-  }:
-    (src: {
-      metadata = cargoMetadata {inherit pkgs name src;};
-      tree = cargoTree {inherit pkgs name src;};
-      unitGraph = cargoUnitGraph {inherit pkgs name src;};
-      workspacePkgManifests = mkWorkspacePkgManifests {src = src;};
-    }) "${src}"; # hack to make evaluation and derivation use same dir
 in {
-  features = mkSmoketest {src = ../features;};
+  features = mkSmoketest {
+    src = ../features;
+    pkg-name = "simple-features";
+  };
 
-  workspace-inline = mkSmoketest {src = ../workspace-inline;};
+  workspace-inline = mkSmoketest {
+    src = ../workspace-inline;
+    pkg-name = "bar";
+  };
 
   pkg-targets = mkSmoketest {src = ../pkg-targets;};
 
-  # foo = inferredTargetsFromSubdir ../pkg-targets "src/bin";
-  # bar = inferredTargetsFromPkgSrc (fromTOML (readFile ../pkg-targets/Cargo.toml)) ../pkg-targets;
-
   fd = mkSmoketest {
     name = "fd";
+    pkg-name = "fd-find";
     src = pkgs.fetchFromGitHub {
       owner = "sharkdp";
       repo = "fd";
@@ -728,4 +788,7 @@ in {
       hash = "sha256-WH2rZ5fOZFt5BTN8QNhpY18CFsr6Lt5zJGgBuB2GvS8=";
     };
   };
+
+  # foo = inferredTargetsFromSubdir ../pkg-targets "src/bin";
+  # bar = inferredTargetsFromPkgSrc (fromTOML (readFile ../pkg-targets/Cargo.toml)) ../pkg-targets;
 }
