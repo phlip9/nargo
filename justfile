@@ -41,6 +41,10 @@ smoketest-pkg2 pkg crate:
 smoketest-pkg pkg:
     nix build -L --show-trace .#crater.x86_64-linux."{{ pkg }}".diffPkgManifests
 
+smoketest-pkg-dbg pkg:
+    nix build -L --show-trace --debugger --impure --ignore-try \
+        .#crater.x86_64-linux."{{ pkg }}".diffPkgManifests
+
 smoketest:
     just smoketest-pkg features
     just smoketest-pkg workspace-inline

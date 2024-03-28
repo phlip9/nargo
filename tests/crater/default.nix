@@ -49,6 +49,7 @@
 
   # dbg = x: builtins.trace x x;
   # dbgJson = x: builtins.trace (builtins.toJSON x) x;
+  # logJson = label: x: builtins.trace (label + builtins.toJSON x) x;
   # traceJson = x: y: builtins.trace (builtins.toJSON x) y;
 
   # filterMap = fn: xs:
@@ -232,9 +233,9 @@
       #   lockVersion = 3;
       #   cargoToml = fromTOML (readFile (src + "/Cargo.toml"));
       # };
-    }) "${src}"; # hack to make evaluation and derivation use same dir
-  # })
-  # src;
+      # }) "${src}"; # hack to make evaluation and derivation use same dir
+    })
+    src;
 
   # A parsed dependency from a Cargo.toml manifest.
   #
@@ -259,125 +260,146 @@
     # section. We inherit fields from this if this dep includes
     # `workspace = true`.
     workspaceToml,
+    # Dir of the cargo workspace (or root crate).
+    workspaceDir,
+    # Parent dir of the Cargo.toml manifest that depends on this dependency.
+    manifestDir,
     # An optional "cfg(...)" target specifier.
     target,
     # The dependency kind ("normal", "dev", "build").
     kind,
   }: name: dep: let
-    inheritsWorkspace = dep.workspace or false;
+    inheritsWorkspace =
+      if dep ? workspace
+      then assert assertMsg dep.workspace "nocargo: `workspace = false` is not allowed"; true
+      else false;
 
     workspaceDep =
       if inheritsWorkspace
       then workspaceToml.dependencies.${name}
-      # then (dbgJson workspaceToml.dependencies.${name}) or throw "nocargo: missing required workspace dependency: ${name}"
+      # or throw "nocargo: missing required workspace dependency: ${name}"
       else null;
-  in {
-    name = name;
-    target = target;
 
-    optional = dep.optional or false;
+    # If this is a path dependency on another workspace crate, then this is the
+    # path to that crate dir. Else null.
+    depPath =
+      if inheritsWorkspace
+      then
+        if workspaceDep ? path
+        then (workspaceDir + "/${workspaceDep.path}")
+        else null
+      else if dep ? path
+      then (manifestDir + "/${dep.path}")
+      else null;
+  in
+    {
+      name = name;
+      target = target;
 
-    # TODO(phlip9): dedup?
-    features = (workspaceDep.features or []) ++ (dep.features or []);
+      optional = dep.optional or false;
 
-    kind =
-      if kind == "normal"
-      # use `null` for normal deps to match `cargo metadata` output
-      then null
-      else kind;
+      # TODO(phlip9): dedup?
+      features = (workspaceDep.features or []) ++ (dep.features or []);
 
-    # The required semver version. ex: `^0.1`, `*`, `=3.0.4`, ...
-    req = let
-      version =
-        # The dep body can be just a version string, ex: `tokio = "1.0"`.
-        if isString dep
-        then dep
-        else if dep ? version
-        then dep.version
-        else if inheritsWorkspace
-        then
-          if isString workspaceDep
-          then workspaceDep
-          else workspaceDep.version or null
+      kind =
+        if kind == "normal"
+        # use `null` for normal deps to match `cargo metadata` output
+        then null
+        else kind;
+
+      # The required semver version. ex: `^0.1`, `*`, `=3.0.4`, ...
+      req = let
+        version =
+          # The dep body can be just a version string, ex: `tokio = "1.0"`.
+          if isString dep
+          then dep
+          else if dep ? version
+          then dep.version
+          else if inheritsWorkspace
+          then
+            if isString workspaceDep
+            then workspaceDep
+            else workspaceDep.version or null
+          else null;
+
+        # ex: "1.0.34" is a 'bare' semver that should be translated to "^1.0.34"
+        firstChar = substring 0 1 version;
+        isBareSemver = (match "[[:digit:]]" firstChar) != null;
+      in
+        # For path or git dependencies, `version` can be omitted.
+        if version == null
+        then null
+        else if isBareSemver
+        then "^${version}"
+        else version;
+
+      # It's `default-features` in Cargo.toml, but `default_features` in index and in pkg info.
+      # Name here is `uses_default_features` to match `cargo metadata` output.
+      # See: <https://github.com/rust-lang/cargo/blob/07253b7ea640e8466408790bb6cad4440eb9531f/src/cargo/util/toml/mod.rs#L1860>
+      uses_default_features =
+        # warnIf (dep ? default_features || workspaceDep ? default_features) "Ignoring `default_features`. Do you mean `default-features`?"
+        if !inheritsWorkspace
+        then dep.default-features or true
+        else let
+          wdepDef = workspaceDep.default-features or true;
+        in
+          # If the workspace dependency either doesn't set `default-features` or
+          # sets it to `true`, then that takes precedence over any member
+          # dependencies due to feature unification.
+          # TODO(phlip9): cargo warns if the member's `default-features == false`.
+          if !(dep ? default-features)
+          then wdepDef
+          else if !wdepDef
+          then dep.default-features
+          else true;
+
+      # See `sanitizeDep`
+      rename = let
+        pkg =
+          if inheritsWorkspace
+          then workspaceDep.package or null
+          else dep.package or null;
+      in
+        if pkg != null
+        then replaceStrings ["-"] ["_"] name
         else null;
 
-      # ex: "1.0.34" is a 'bare' semver that should be translated to "^1.0.34"
-      firstChar = substring 0 1 version;
-      isBareSemver = (match "[[:digit:]]" firstChar) != null;
-    in
-      # For path or git dependencies, `version` can be omitted.
-      if version == null
-      then null
-      else if isBareSemver
-      then "^${version}"
-      else version;
-
-    # It's `default-features` in Cargo.toml, but `default_features` in index and in pkg info.
-    # Name here is `uses_default_features` to match `cargo metadata` output.
-    # See: <https://github.com/rust-lang/cargo/blob/07253b7ea640e8466408790bb6cad4440eb9531f/src/cargo/util/toml/mod.rs#L1860>
-    uses_default_features =
-      # warnIf (dep ? default_features || workspaceDep ? default_features) "Ignoring `default_features`. Do you mean `default-features`?"
-      if !inheritsWorkspace
-      then dep.default-features or true
-      else let
-        wdepDef = workspaceDep.default-features or null;
+      # This is used for dependency resolving inside Cargo.lock.
+      source = let
+        sourceDep =
+          if inheritsWorkspace
+          then workspaceDep
+          else dep;
       in
-        # If the workspace dependency either doesn't set `default-features` or
-        # sets it to `true`, then that takes precedence over any member
-        # dependencies due to feature unification.
-        # TODO(phlip9): cargo warns in these first two cases if the member's
-        #               `default-features == false`.
-        if wdepDef == null
-        then true
-        else if wdepDef == true
-        then true
-        else dep.default-features or true;
+        if sourceDep ? registry
+        then throw "Dependency with `registry` is not supported. Use `registry-index` with explicit URL instead."
+        else if sourceDep ? registry-index
+        then "registry+${sourceDep.registry-index}"
+        else if sourceDep ? git
+        then
+          # For v1 and v2, git-branch URLs are encoded as "git+url" with no query parameters.
+          if sourceDep ? branch && lockVersion >= 3
+          then "git+${sourceDep.git}?branch=${sourceDep.branch}"
+          else if sourceDep ? tag
+          then "git+${sourceDep.git}?tag=${sourceDep.tag}"
+          else if sourceDep ? rev
+          then "git+${sourceDep.git}?rev=${sourceDep.rev}"
+          else "git+${sourceDep.git}"
+        else if sourceDep ? path
+        then
+          # Local crates are mark with `null` source.
+          null
+        else
+          # Default to use crates.io registry.
+          # N.B. This is necessary and must not be `null`, or it will be indinstinguishable
+          # with local crates or crates from other registries.
+          "registry+https://github.com/rust-lang/crates.io-index";
 
-    # See `sanitizeDep`
-    rename = let
-      pkg =
-        if inheritsWorkspace
-        then workspaceDep.package or null
-        else dep.package or null;
-    in
-      if pkg != null
-      then replaceStrings ["-"] ["_"] name
-      else null;
-
-    # This is used for dependency resolving inside Cargo.lock.
-    source = let
-      sourceDep =
-        if inheritsWorkspace
-        then workspaceDep
-        else dep;
-    in
-      if sourceDep ? registry
-      then throw "Dependency with `registry` is not supported. Use `registry-index` with explicit URL instead."
-      else if sourceDep ? registry-index
-      then "registry+${sourceDep.registry-index}"
-      else if sourceDep ? git
-      then
-        # For v1 and v2, git-branch URLs are encoded as "git+url" with no query parameters.
-        if sourceDep ? branch && lockVersion >= 3
-        then "git+${sourceDep.git}?branch=${sourceDep.branch}"
-        else if sourceDep ? tag
-        then "git+${sourceDep.git}?tag=${sourceDep.tag}"
-        else if sourceDep ? rev
-        then "git+${sourceDep.git}?rev=${sourceDep.rev}"
-        else "git+${sourceDep.git}"
-      else if sourceDep ? path
-      then
-        # Local crates are mark with `null` source.
-        null
-      else
-        # Default to use crates.io registry.
-        # N.B. This is necessary and must not be `null`, or it will be indinstinguishable
-        # with local crates or crates from other registries.
-        "registry+https://github.com/rust-lang/crates.io-index";
-
-    registry = null;
-    # package = v.package or name;
-  };
+      registry = null;
+      # package = v.package or name;
+    }
+    # only included for path dependencies on other workspace crates
+    // optionalAttrs (depPath != null) {path = depPath;};
 
   # inferredTargetsFromSubdir :: Path -> String -> List({ name: String, path: String })
   #
@@ -514,7 +536,7 @@
     }
     // optionalAttrs (tomlTarget ? required-features) {
       # TODO(phlip9): check subset of available features
-      required_features = tomlTarget.required-features;
+      required-features = tomlTarget.required-features;
     };
 
   # Make the full package target set for a specific target kind.
@@ -668,8 +690,12 @@
     src,
     # [workspace] section in root Cargo.toml, or null if nonexistant.
     workspaceToml,
-    # package's Cargo.toml
+    # Dir of the cargo workspace (or root crate).
+    workspaceDir,
+    # package's Cargo.toml.
     cargoToml,
+    # Dir containing `cargoToml`.
+    manifestDir,
   }: let
     collectTargetDeps = target: {
       dependencies ? {},
@@ -679,7 +705,7 @@
     }: let
       transDeps = kind: deps:
         mapAttrsToList
-        (mkManifestDependency {inherit lockVersion workspaceToml target kind;})
+        (mkManifestDependency {inherit lockVersion workspaceToml workspaceDir manifestDir target kind;})
         deps;
 
       deps = transDeps "normal" dependencies;
@@ -712,45 +738,69 @@
     in
       foldl' maybeAddOptionalFeature (cargoToml.features or {}) dependencies;
 
-    # cargo defaults to "2015" if missing, for backwards compat.
-    edition = package.edition or "2015";
-
     package = cargoToml.package;
+    workspacePackage = workspaceToml.package;
+
+    # TODO(phlip9): inherit workspace lints?
+
+    # Try to inherit from the workspace if `cargoToml.${name}.workspace == true`.
+    # Else fallback to default value `default`.
+    tryInherit = propName: default:
+      if !(package ? ${propName})
+      then default # missing property, use default
+      else let
+        prop = package.${propName};
+      in
+        if prop ? workspace
+        then
+          # inherit from workspace
+          assert (assertMsg prop.workspace "nocargo: `${propName}.workspace = false` is not allowed");
+          assert (assertMsg (workspacePackage ? ${propName}) "nocargo: trying to inherit `${propName}` from workspace, but it doesn't exist in the workspace package");
+            workspacePackage.${propName}
+        else prop;
+
+    # cargo defaults to "2015" if missing, for backwards compat.
+    edition = tryInherit "edition" "2015";
   in {
-    name = package.name;
-    version = package.version;
     # TODO(phlip9): this adds an extra copy of the whole crate dir to the
     # store... try only conditionally adding this?
-    id = "${package.name} ${package.version} (path+file://" + src + ")";
-    manifest_path = src + "/Cargo.toml";
-
-    edition = edition;
     dependencies = dependencies;
+    edition = edition;
     features = features;
+    id = "${package.name} ${package.version} (path+file://" + src + ")";
     links = package.links or null;
+    manifest_path = src + "/Cargo.toml";
+    name = package.name;
     source = null;
-
     targets = mkPkgTargets {inherit src edition cargoToml;};
 
+    # We can inherit the package version from the workspace
+    version = tryInherit "version" (throw "nocargo: package manifest is missing the `version` field");
+
+    #
     # Extra fields needed to match `cargo metadata` output.
-    authors = package.authors or [];
-    categories = package.categories or [];
+    #
+
     default_run = package.default-run or null;
-    description = package.description or null;
-    documentation = package.documentation or null;
-    homepage = package.homepage or null;
-    keywords = package.keywords or [];
-    license = package.license or null;
-    # TODO(phlip9): if inherited from workspace, then it's relative to the
-    #               workspace root.
-    license_file = package.license-file or null;
     metadata = package.metadata or null;
-    publish = package.publish or null;
+
+    # Fields we can inherit from the workspace Cargo.toml [workspace.package]
+    authors = tryInherit "authors" [];
+    categories = tryInherit "categories" [];
+    description = tryInherit "description" null;
+    documentation = tryInherit "documentation" null;
+    homepage = tryInherit "homepage" null;
+    keywords = tryInherit "keywords" [];
+    license = tryInherit "license" null;
     # TODO(phlip9): if inherited from workspace, then it's relative to the
     #               workspace root.
-    readme = package.readme or null;
-    repository = package.repository or null;
-    rust_version = package.rust-version or null;
+    license_file = tryInherit "license-file" null;
+    publish = tryInherit "publish" null;
+    # TODO(phlip9): if inherited from workspace, then it's relative to the
+    #               workspace root.
+    readme = tryInherit "readme" null;
+    repository = tryInherit "repository" null;
+    rust_version = tryInherit "rust-version" null;
   };
 
   # # Workspace members can inherit fields from the top-level workspace
@@ -813,6 +863,7 @@
 
     # The [workspace] section in the root Cargo.toml (or null if there is none).
     workspaceToml = cargoToml.workspace or null;
+    workspaceDir = src;
 
     # Package manifests for local crates inside the workspace.
     workspacePkgManifests =
@@ -830,9 +881,10 @@
               then fromTOML (readFile (memberSrc + "/Cargo.toml"))
               else cargoToml;
             memberManifest = mkPkgManifest {
-              inherit lockVersion workspaceToml;
+              inherit lockVersion workspaceToml workspaceDir;
               src = memberSrc;
               cargoToml = memberCargoToml;
+              manifestDir = memberSrc;
             };
           in {
             name = toPkgId memberCargoToml.package;
