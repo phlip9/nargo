@@ -11,6 +11,17 @@ workspace-manifests pkg:
         | tee /dev/stderr \
         > "{{ pkg }}.workspace-manifests.json"
 
+workspace-manifests-verbose pkg:
+    nix eval --json --read-only --show-trace --debug .#crater.x86_64-linux."{{ pkg }}".workspacePkgManifests \
+        2> /dev/stdout \
+        1> /dev/null
+
+workspace-manifests-dbg-copies pkg:
+    nix eval --json --read-only --show-trace --debug .#crater.x86_64-linux."{{ pkg }}".workspacePkgManifests \
+        2> /dev/stdout \
+        1> /dev/null \
+        | grep "copied"
+
 diff-metadata-manifests pkg crate:
     diff -u --color=always \
         <(jq -S '.packages[] | select(.name == "{{ crate }}")' "{{ pkg }}.cargo-metadata.json") \
@@ -32,6 +43,7 @@ smoketest-pkg pkg:
 
 smoketest:
     just smoketest-pkg features
-    just smoketest-pkg fd
     just smoketest-pkg workspace-inline
     just smoketest-pkg pkg-targets
+    just smoketest-pkg fd
+    just smoketest-pkg rage

@@ -12,8 +12,10 @@
     all
     baseNameOf
     concatLists
+    elemAt
     foldl'
     fromTOML
+    length
     match
     partition
     pathExists
@@ -21,6 +23,7 @@
     readFile
     substring
     toJSON
+    toInt
     ;
   inherit
     (lib)
@@ -39,7 +42,6 @@
     removeSuffix
     replaceStrings
     subtractLists
-    warnIf
     ;
   inherit (nocargo-lib.pkg-info) toPkgId;
   inherit (nocargo-lib.glob) globMatchDir;
@@ -47,6 +49,7 @@
 
   # dbg = x: builtins.trace x x;
   # dbgJson = x: builtins.trace (builtins.toJSON x) x;
+  # traceJson = x: y: builtins.trace (builtins.toJSON x) y;
 
   # filterMap = fn: xs:
   #   foldl'
@@ -225,7 +228,13 @@
         json2 = workspacePkgManifests;
         jq2 = ''."${pkg-name}"'';
       };
+      # workspaceManifest = mkWorkspaceInheritableManifest {
+      #   lockVersion = 3;
+      #   cargoToml = fromTOML (readFile (src + "/Cargo.toml"));
+      # };
     }) "${src}"; # hack to make evaluation and derivation use same dir
+  # })
+  # src;
 
   # A parsed dependency from a Cargo.toml manifest.
   #
@@ -245,15 +254,31 @@
   # ```
   mkManifestDependency = {
     lockVersion,
+    # `null` if this is a single crate package with no workspace.
+    # otherwise, this is the _unparsed_ workspace Cargo.toml [workspace]
+    # section. We inherit fields from this if this dep includes
+    # `workspace = true`.
+    workspaceToml,
     # An optional "cfg(...)" target specifier.
     target,
-    # The dependency kind (normal, dev, build)
+    # The dependency kind ("normal", "dev", "build").
     kind,
-  }: name: dep: {
+  }: name: dep: let
+    inheritsWorkspace = dep.workspace or false;
+
+    workspaceDep =
+      if inheritsWorkspace
+      then workspaceToml.dependencies.${name}
+      # then (dbgJson workspaceToml.dependencies.${name}) or throw "nocargo: missing required workspace dependency: ${name}"
+      else null;
+  in {
     name = name;
     target = target;
-    features = dep.features or [];
+
     optional = dep.optional or false;
+
+    # TODO(phlip9): dedup?
+    features = (workspaceDep.features or []) ++ (dep.features or []);
 
     kind =
       if kind == "normal"
@@ -264,12 +289,20 @@
     # The required semver version. ex: `^0.1`, `*`, `=3.0.4`, ...
     req = let
       version =
-        # The dep body can be just the version string, ex: `tokio = "1.0"`.
+        # The dep body can be just a version string, ex: `tokio = "1.0"`.
         if isString dep
         then dep
-        else dep.version or null;
-      firstChar = substring 0 1 version;
+        else if dep ? version
+        then dep.version
+        else if inheritsWorkspace
+        then
+          if isString workspaceDep
+          then workspaceDep
+          else workspaceDep.version or null
+        else null;
+
       # ex: "1.0.34" is a 'bare' semver that should be translated to "^1.0.34"
+      firstChar = substring 0 1 version;
       isBareSemver = (match "[[:digit:]]" firstChar) != null;
     in
       # For path or git dependencies, `version` can be omitted.
@@ -281,33 +314,58 @@
 
     # It's `default-features` in Cargo.toml, but `default_features` in index and in pkg info.
     # Name here is `uses_default_features` to match `cargo metadata` output.
+    # See: <https://github.com/rust-lang/cargo/blob/07253b7ea640e8466408790bb6cad4440eb9531f/src/cargo/util/toml/mod.rs#L1860>
     uses_default_features =
-      warnIf (dep ? default_features) "Ignoring `default_features`. Do you mean `default-features`?"
-      (dep.default-features or true);
+      # warnIf (dep ? default_features || workspaceDep ? default_features) "Ignoring `default_features`. Do you mean `default-features`?"
+      if !inheritsWorkspace
+      then dep.default-features or true
+      else let
+        wdepDef = workspaceDep.default-features or null;
+      in
+        # If the workspace dependency either doesn't set `default-features` or
+        # sets it to `true`, then that takes precedence over any member
+        # dependencies due to feature unification.
+        # TODO(phlip9): cargo warns in these first two cases if the member's
+        #               `default-features == false`.
+        if wdepDef == null
+        then true
+        else if wdepDef == true
+        then true
+        else dep.default-features or true;
 
     # See `sanitizeDep`
-    rename =
-      if (dep.package or null) != null
+    rename = let
+      pkg =
+        if inheritsWorkspace
+        then workspaceDep.package or null
+        else dep.package or null;
+    in
+      if pkg != null
       then replaceStrings ["-"] ["_"] name
       else null;
 
     # This is used for dependency resolving inside Cargo.lock.
-    source =
-      if dep ? registry
+    source = let
+      sourceDep =
+        if inheritsWorkspace
+        then workspaceDep
+        else dep;
+    in
+      if sourceDep ? registry
       then throw "Dependency with `registry` is not supported. Use `registry-index` with explicit URL instead."
-      else if dep ? registry-index
-      then "registry+${dep.registry-index}"
-      else if dep ? git
+      else if sourceDep ? registry-index
+      then "registry+${sourceDep.registry-index}"
+      else if sourceDep ? git
       then
         # For v1 and v2, git-branch URLs are encoded as "git+url" with no query parameters.
-        if dep ? branch && lockVersion >= 3
-        then "git+${dep.git}?branch=${dep.branch}"
-        else if dep ? tag
-        then "git+${dep.git}?tag=${dep.tag}"
-        else if dep ? rev
-        then "git+${dep.git}?rev=${dep.rev}"
-        else "git+${dep.git}"
-      else if dep ? path
+        if sourceDep ? branch && lockVersion >= 3
+        then "git+${sourceDep.git}?branch=${sourceDep.branch}"
+        else if sourceDep ? tag
+        then "git+${sourceDep.git}?tag=${sourceDep.tag}"
+        else if sourceDep ? rev
+        then "git+${sourceDep.git}?rev=${sourceDep.rev}"
+        else "git+${sourceDep.git}"
+      else if sourceDep ? path
       then
         # Local crates are mark with `null` source.
         null
@@ -358,7 +416,7 @@
 
   # inferredFileTarget :: Path -> String -> String -> List({ name: String, path: String })
   inferredFileTarget = src: name: filepath:
-    optional (pathExists (src + "/" + filepath)) {
+    optional (pathExists (src + "/${filepath}")) {
       name = name;
       path = filepath;
     };
@@ -484,6 +542,11 @@
         right = inferredTargets;
         wrong = [];
       }
+      else if kind == "lib"
+      then {
+        right = [];
+        wrong = inferredTargets;
+      }
       else
         # otherwise partition inferred targets into...
         partition (
@@ -510,12 +573,20 @@
     cleanedTomlTargets = map (
       tomlTarget: let
         # Find any matching inferred target with the same name or path.
-        inferredTarget = assert assertMsg (tomlTarget ? name || tomlTarget ? path) "nocargo: cargo target must have a name or path";
-          findFirst (
-            inferred: inferred.name == tomlTarget.name || inferred.path == tomlTarget.path
-          )
-          {}
-          toMergeInferredTargets;
+        inferredTarget =
+          # lib targets need some special handling...
+          if kind == "lib"
+          then
+            if length inferredTargets == 0
+            then {name = name;}
+            else elemAt inferredTargets 0
+          else
+            assert assertMsg (tomlTarget ? name || tomlTarget ? path) "nocargo: cargo target must have a name or path";
+              findFirst (
+                inferred: inferred.name == (tomlTarget.name or null) || inferred.path == (tomlTarget.path or null)
+              )
+              {}
+              toMergeInferredTargets;
       in
         deserializeTomlPkgTarget {
           inherit src edition name kind;
@@ -595,6 +666,9 @@
   mkPkgManifest = {
     lockVersion,
     src,
+    # [workspace] section in root Cargo.toml, or null if nonexistant.
+    workspaceToml,
+    # package's Cargo.toml
     cargoToml,
   }: let
     collectTargetDeps = target: {
@@ -604,7 +678,9 @@
       ...
     }: let
       transDeps = kind: deps:
-        mapAttrsToList (mkManifestDependency {inherit lockVersion target kind;}) deps;
+        mapAttrsToList
+        (mkManifestDependency {inherit lockVersion workspaceToml target kind;})
+        deps;
 
       deps = transDeps "normal" dependencies;
       devDeps = transDeps "dev" dev-dependencies;
@@ -643,7 +719,9 @@
   in {
     name = package.name;
     version = package.version;
-    id = "${package.name} ${package.version} (path+file://${src})";
+    # TODO(phlip9): this adds an extra copy of the whole crate dir to the
+    # store... try only conditionally adding this?
+    id = "${package.name} ${package.version} (path+file://" + src + ")";
     manifest_path = src + "/Cargo.toml";
 
     edition = edition;
@@ -663,13 +741,61 @@
     homepage = package.homepage or null;
     keywords = package.keywords or [];
     license = package.license or null;
+    # TODO(phlip9): if inherited from workspace, then it's relative to the
+    #               workspace root.
     license_file = package.license-file or null;
     metadata = package.metadata or null;
     publish = package.publish or null;
+    # TODO(phlip9): if inherited from workspace, then it's relative to the
+    #               workspace root.
     readme = package.readme or null;
     repository = package.repository or null;
     rust_version = package.rust-version or null;
   };
+
+  # # Workspace members can inherit fields from the top-level workspace
+  # # Cargo.toml. This function parses the workspace Cargo.toml and returns a
+  # # collection of all inheritable fields. We'll use this in a moment while
+  # # parsing the rest of the workspace member manifests.
+  # #
+  # # See: <https://doc.rust-lang.org/cargo/reference/workspaces.html#the-package-table>
+  # mkWorkspaceInheritableManifest = {
+  #   lockVersion,
+  #   cargoToml,
+  # }: let
+  #   workspace = cargoToml.workspace or {};
+  #   package = workspace.package or {};
+  # in {
+  #   version = package.version or null;
+  #
+  #   # Workspace default is v1 if unspecified. Actual value depends on the root
+  #   # crate's edition (2021 ==> v2).
+  #   resolver = workspace.resolver or "1";
+  #
+  #   dependencies =
+  #     mapAttrsToList
+  #     (mkManifestDependency {
+  #       inherit lockVersion;
+  #       target = null;
+  #       kind = "normal";
+  #       isWorkspaceDep = true;
+  #     })
+  #     (workspace.dependencies or []);
+  #
+  #   # Extra fields needed to match `cargo metadata` output.
+  #   authors = package.authors or [];
+  #   categories = package.categories or [];
+  #   description = package.description or null;
+  #   documentation = package.documentation or null;
+  #   homepage = package.homepage or null;
+  #   keywords = package.keywords or [];
+  #   license = package.license or null;
+  #   license_file = package.license-file or null;
+  #   publish = package.publish or null;
+  #   readme = package.readme or null;
+  #   repository = package.repository or null;
+  #   rust_version = package.rust-version or null;
+  # };
 
   # Parse package manifests all local crates inside the workspace.
   mkWorkspacePkgManifests = {
@@ -683,7 +809,10 @@
     workspaceMemberPaths = subtractLists excluded selected;
 
     # We don't distinguish between v1 and v2. But v3 is different from both.
-    lockVersion = cargoLock.version or 3;
+    lockVersion = toInt (cargoLock.version or 3);
+
+    # The [workspace] section in the root Cargo.toml (or null if there is none).
+    workspaceToml = cargoToml.workspace or null;
 
     # Package manifests for local crates inside the workspace.
     workspacePkgManifests =
@@ -696,9 +825,12 @@
               then src
               else src + "/${relativePath}";
 
-            memberCargoToml = fromTOML (readFile (memberSrc + "/Cargo.toml"));
+            memberCargoToml =
+              if relativePath != ""
+              then fromTOML (readFile (memberSrc + "/Cargo.toml"))
+              else cargoToml;
             memberManifest = mkPkgManifest {
-              inherit lockVersion;
+              inherit lockVersion workspaceToml;
               src = memberSrc;
               cargoToml = memberCargoToml;
             };
@@ -749,18 +881,23 @@
   #     or (throw "Git source `${url}` not found. Please define it in `gitSrcs`.")
   #   else throw "Invalid source: ${source}";
 in {
+  # test Cargo.toml features
   features = mkSmoketest {
     src = ../features;
     pkg-name = "simple-features";
   };
 
+  # test basic cargo workspace w/ internal deps
   workspace-inline = mkSmoketest {
     src = ../workspace-inline;
     pkg-name = "bar";
   };
 
+  # test parsing cargo package targets with both explicit and autodiscovered
+  # targets
   pkg-targets = mkSmoketest {src = ../pkg-targets;};
 
+  # non-trivial binary crate (not workspace)
   fd = mkSmoketest {
     name = "fd";
     pkg-name = "fd-find";
@@ -769,6 +906,17 @@ in {
       repo = "fd";
       rev = "68fe31da3f5da5d8d5b997d8919dc97e6eafead5";
       hash = "sha256-WH2rZ5fOZFt5BTN8QNhpY18CFsr6Lt5zJGgBuB2GvS8=";
+    };
+  };
+
+  # non-trivial binary crate (workspace)
+  rage = mkSmoketest rec {
+    name = "rage";
+    src = pkgs.fetchFromGitHub {
+      owner = "str4d";
+      repo = name;
+      rev = "v0.10.0";
+      hash = "sha256-7PfNDFDuvQ9T3BeA15FuY1jAprGLsyglWXcNrZvtPAE=";
     };
   };
 
