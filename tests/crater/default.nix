@@ -222,12 +222,19 @@
       tree = cargoTree {inherit pkgs name src;};
       unitGraph = cargoUnitGraph {inherit pkgs name src;};
       workspacePkgManifests = mkWorkspacePkgManifests {src = src;};
-      diffPkgManifests = assertJsonDrvEq {
+      diffPkgManifest = assertJsonDrvEq {
         name = "${name}-${pkg-name}";
         json1 = metadata;
         jq1 = ''.packages[] | select(.name == "${pkg-name}")'';
         json2 = workspacePkgManifests;
         jq2 = ''."${pkg-name}"'';
+      };
+      diffPkgManifests = assertJsonDrvEq {
+        name = "${name}";
+        json1 = metadata;
+        jq1 = ''.packages | map(select(.source == null) | { (.name): . }) | add'';
+        json2 = workspacePkgManifests;
+        jq2 = ''.'';
       };
       # workspaceManifest = mkWorkspaceInheritableManifest {
       #   lockVersion = 3;

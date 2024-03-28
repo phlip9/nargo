@@ -22,10 +22,15 @@ workspace-manifests-dbg-copies pkg:
         1> /dev/null \
         | grep "copied"
 
-diff-metadata-manifests pkg crate:
+diff-metadata-manifest pkg crate:
     diff -u --color=always \
         <(jq -S '.packages[] | select(.name == "{{ crate }}")' "{{ pkg }}.cargo-metadata.json") \
         <(jq -S '."{{ crate }}"' "{{ pkg }}.workspace-manifests.json")
+
+diff-metadata-manifests pkg:
+    diff -u --color=always \
+        <(jq -S '.packages | map(select(.source == null) | { (.name): . }) | add' "{{ pkg }}.cargo-metadata.json") \
+        <(jq -S '.' "{{ pkg }}.workspace-manifests.json")
 
 smoketest2:
     # just smoketest-pkg2 features simple-features
