@@ -367,17 +367,14 @@
           then
             if isString workspaceDep
             then workspaceDep
-            else workspaceDep.version or null
-          else null;
+            else workspaceDep.version or "*"
+          else "*";
 
         # ex: "1.0.34" is a 'bare' semver that should be translated to "^1.0.34"
         firstChar = substring 0 1 version;
         isBareSemver = (match "[[:digit:]]" firstChar) != null;
       in
-        # For path or git dependencies, `version` can be omitted.
-        if version == null
-        then null
-        else if isBareSemver
+        if isBareSemver
         then "^${version}"
         else version;
 
