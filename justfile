@@ -56,3 +56,7 @@ smoketest:
     just smoketest-pkg pkg-targets
     just smoketest-pkg fd
     just smoketest-pkg rage
+
+test:
+    nix eval --read-only --show-trace \
+        .#crater.x86_64-linux.tests

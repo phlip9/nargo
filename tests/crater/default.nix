@@ -22,8 +22,8 @@
     readDir
     readFile
     substring
-    toJSON
     toInt
+    toJSON
     ;
   inherit
     (lib)
@@ -39,8 +39,10 @@
     mapNullable
     optional
     optionalAttrs
+    removePrefix
     removeSuffix
     replaceStrings
+    runTests
     subtractLists
     ;
   inherit (nocargo-lib.pkg-info) toPkgId;
@@ -240,9 +242,47 @@
       #   lockVersion = 3;
       #   cargoToml = fromTOML (readFile (src + "/Cargo.toml"));
       # };
-      # }) "${src}"; # hack to make evaluation and derivation use same dir
-    })
-    src;
+    }) "${src}"; # hack to make evaluation and derivation use same dir
+  # })
+  # src;
+
+  # `builtins.dirOf` but it `throw`s if `dirPath` has no parent directory. It
+  # also normalizes the output of `dirOf` so `dirOf "foo" == ""` and not "."
+  # NOTE: only works for relative paths atm.
+  strictDirOf = p:
+    if p == "" || p == "."
+    then throw "nocargo: dependency path must not leave workspace directory"
+    else let
+      parent = dirOf p;
+    in
+      if parent == "."
+      then ""
+      else parent;
+
+  # "canonicalize" the path `${pkgDirRelPath}/${depRelPath}` so it doesn't
+  # contain any "." or ".." segments.
+  #
+  # `pkgDirRelPath` is a relative path to a workspace crate dir. In this fn we
+  # assume it's already normalized.
+  #
+  # `depRelPath` is a relative path from one workspace crate dir (the dependent)
+  # to another workspace crate dir (the dependency).
+  canonicalizeDepPath = pkgDirRelPath: depRelPath:
+    removePrefix "/"
+    (foldl' (
+        acc: pathSegment:
+        # matched "/" are included in the split... just ignore these
+        #                                 vv              v
+        # noop path segments like the "asd//dfdf" or "foo/./bar" are also
+        # skipped over
+          if !isString pathSegment || pathSegment == "" || pathSegment == "."
+          then acc
+          else if pathSegment == ".."
+          then (strictDirOf acc)
+          else (acc + "/" + pathSegment)
+      )
+      pkgDirRelPath
+      (builtins.split "/" depRelPath));
 
   # A parsed dependency from a Cargo.toml manifest.
   #
@@ -264,13 +304,14 @@
     lockVersion,
     # `null` if this is a single crate package with no workspace.
     # otherwise, this is the _unparsed_ workspace Cargo.toml [workspace]
-    # section. We inherit fields from this if this dep includes
-    # `workspace = true`.
+    # section. We inherit fields from this if this dep includes a
+    # `workspace = true` field.
     workspaceToml,
     # Dir of the cargo workspace (or root crate).
     workspaceDir,
     # Parent dir of the Cargo.toml manifest that depends on this dependency.
-    manifestDir,
+    # This path is relative to the workspace directory, `workspaceDir`.
+    pkgDirRelPath,
     # An optional "cfg(...)" target specifier.
     target,
     # The dependency kind ("normal", "dev", "build").
@@ -296,7 +337,7 @@
         then (workspaceDir + "/${workspaceDep.path}")
         else null
       else if dep ? path
-      then (manifestDir + "/${dep.path}")
+      then (workspaceDir + "/" + (canonicalizeDepPath pkgDirRelPath "${dep.path}"))
       else null;
   in
     {
@@ -701,8 +742,9 @@
     workspaceDir,
     # package's Cargo.toml.
     cargoToml,
-    # Dir containing `cargoToml`.
-    manifestDir,
+    # package's directory. Contains the Cargo.toml file. This path is relative
+    # to the workspace directory.
+    pkgDirRelPath,
   }: let
     collectTargetDeps = target: {
       dependencies ? {},
@@ -712,7 +754,7 @@
     }: let
       transDeps = kind: deps:
         mapAttrsToList
-        (mkManifestDependency {inherit lockVersion workspaceToml workspaceDir manifestDir target kind;})
+        (mkManifestDependency {inherit lockVersion workspaceToml workspaceDir pkgDirRelPath target kind;})
         deps;
 
       deps = transDeps "normal" dependencies;
@@ -810,50 +852,6 @@
     rust_version = tryInherit "rust-version" null;
   };
 
-  # # Workspace members can inherit fields from the top-level workspace
-  # # Cargo.toml. This function parses the workspace Cargo.toml and returns a
-  # # collection of all inheritable fields. We'll use this in a moment while
-  # # parsing the rest of the workspace member manifests.
-  # #
-  # # See: <https://doc.rust-lang.org/cargo/reference/workspaces.html#the-package-table>
-  # mkWorkspaceInheritableManifest = {
-  #   lockVersion,
-  #   cargoToml,
-  # }: let
-  #   workspace = cargoToml.workspace or {};
-  #   package = workspace.package or {};
-  # in {
-  #   version = package.version or null;
-  #
-  #   # Workspace default is v1 if unspecified. Actual value depends on the root
-  #   # crate's edition (2021 ==> v2).
-  #   resolver = workspace.resolver or "1";
-  #
-  #   dependencies =
-  #     mapAttrsToList
-  #     (mkManifestDependency {
-  #       inherit lockVersion;
-  #       target = null;
-  #       kind = "normal";
-  #       isWorkspaceDep = true;
-  #     })
-  #     (workspace.dependencies or []);
-  #
-  #   # Extra fields needed to match `cargo metadata` output.
-  #   authors = package.authors or [];
-  #   categories = package.categories or [];
-  #   description = package.description or null;
-  #   documentation = package.documentation or null;
-  #   homepage = package.homepage or null;
-  #   keywords = package.keywords or [];
-  #   license = package.license or null;
-  #   license_file = package.license-file or null;
-  #   publish = package.publish or null;
-  #   readme = package.readme or null;
-  #   repository = package.repository or null;
-  #   rust_version = package.rust-version or null;
-  # };
-
   # Parse package manifests all local crates inside the workspace.
   mkWorkspacePkgManifests = {
     src ? throw "require package src",
@@ -891,7 +889,7 @@
               inherit lockVersion workspaceToml workspaceDir;
               src = memberSrc;
               cargoToml = memberCargoToml;
-              manifestDir = memberSrc;
+              pkgDirRelPath = relativePath;
             };
           in {
             name = toPkgId memberCargoToml.package;
@@ -979,6 +977,38 @@ in {
     };
   };
 
-  # foo = inferredTargetsFromSubdir ../pkg-targets "src/bin";
-  # bar = inferredTargetsFromPkgSrc (fromTOML (readFile ../pkg-targets/Cargo.toml)) ../pkg-targets;
+  # unit tests
+  tests = let
+    testCanonicalizeDepPath = let
+      case = pkgDirRelPath: depPath: expected: {
+        expr = canonicalizeDepPath pkgDirRelPath depPath;
+        expected = expected;
+      };
+
+      cases = [
+        (case "" "" "")
+        (case "" "a" "a")
+        (case "" "a/b" "a/b")
+        (case "a" "" "a")
+        (case "a" "b" "a/b")
+        (case "a" "../b" "b")
+        (case "a" "." "a")
+        (case "a" "./" "a")
+        (case "a" "./b" "a/b")
+        (case "a" "./b/" "a/b")
+        (case "a/b" "../../c" "c")
+        # (case "" "../b" "<throws>")
+        # (case "a" "../../b" "<throws>")
+      ];
+    in
+      builtins.listToAttrs (builtins.genList (idx: {
+        name = "testCanonicalizeDepPath${toString idx}";
+        value = elemAt cases idx;
+      }) (length cases));
+  in
+    runTests (
+      testCanonicalizeDepPath
+      # # uncomment to run specific tests
+      # // {tests = ["test1"];}
+    );
 }
