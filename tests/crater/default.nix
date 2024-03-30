@@ -10,6 +10,7 @@
   inherit
     (builtins)
     all
+    attrValues
     baseNameOf
     concatLists
     elemAt
@@ -31,6 +32,7 @@
     findFirst
     flatten
     foldlAttrs
+    hasPrefix
     hasSuffix
     isDerivation
     isString
@@ -38,6 +40,7 @@
     mapAttrsToList
     mapNullable
     optional
+    optionals
     optionalAttrs
     removePrefix
     removeSuffix
@@ -341,7 +344,7 @@
       else null;
   in
     {
-      name = name;
+      name = dep.package or name;
       target = target;
 
       optional = dep.optional or false;
@@ -441,7 +444,6 @@
           "registry+https://github.com/rust-lang/crates.io-index";
 
       registry = null;
-      # package = v.package or name;
     }
     # only included for path dependencies on other workspace crates
     // optionalAttrs (depPath != null) {path = depPath;};
@@ -672,8 +674,10 @@
     edition,
     cargoToml,
   }: let
+    package = cargoToml.package;
+
     # kinds = ["lib" "bin" "custom-build" "test" "example" "bench"];
-    name = cargoToml.package.name;
+    name = package.name;
 
     tomlTargetLib =
       if cargoToml ? lib
@@ -692,25 +696,25 @@
       (mkPkgKindTargets {
         inherit src edition name;
         kind = "bin";
-        autodiscover = cargoToml.autobins or true;
+        autodiscover = package.autobins or true;
         tomlTargets = cargoToml.bin or [];
       })
       (mkPkgKindTargets {
         inherit src edition name;
         kind = "example";
-        autodiscover = cargoToml.autoexamples or true;
+        autodiscover = package.autoexamples or true;
         tomlTargets = cargoToml.example or [];
       })
       (mkPkgKindTargets {
         inherit src edition name;
         kind = "test";
-        autodiscover = cargoToml.autotests or true;
+        autodiscover = package.autotests or true;
         tomlTargets = cargoToml.test or [];
       })
       (mkPkgKindTargets {
         inherit src edition name;
         kind = "bench";
-        autodiscover = cargoToml.autobenches or true;
+        autodiscover = package.autobenches or true;
         tomlTargets = cargoToml.bench or [];
       })
       (mkPkgKindTargets {
@@ -718,10 +722,10 @@
         kind = "custom-build";
         # this looks weird, but `build` can be missing (enable autodiscover) a
         # boolean (maybe autodiscover), or a string path (disable autodiscover).
-        autodiscover = (cargoToml.build or true) == true;
-        tomlTargets = optional (cargoToml ? build && isString cargoToml.build) {
+        autodiscover = (package.build or true) == true;
+        tomlTargets = optional (package ? build && isString package.build) {
           name = "build-script-build";
-          path = cargoToml.build;
+          path = package.build;
         };
       })
     ];
@@ -770,19 +774,43 @@
 
     # Build the [features] mapping. Also adds the "dep:<crate>" pseudo-features
     # for optional dependencies.
+    # TODO(phlip9): validate feature names: <https://github.com/rust-lang/cargo/blob/rust-1.78.0/crates/cargo-util-schemas/src/restricted_names.rs#L195>
     features = let
-      maybeAddOptionalFeature = feats: dep:
+      rawFeatures = cargoToml.features or {};
+
+      # explicitDepFeatures :: Set<DepName>
+      #
+      # Find all the "dep:<name>" features already mentioned in the `[feature]`
+      # section.
+      explicitDepFeatures = foldl' (
+        acc: featureValues:
+          foldl' (
+            acc': featureValue:
+              if hasPrefix "dep:" featureValue
+              then acc' // {${substring 4 (-1) featureValue} = null;}
+              else acc'
+          )
+          acc
+          featureValues
+      ) {} (attrValues rawFeatures);
+
+      # Add all `{ optional = true }` features as `dep:<name>` features, except
+      # those that were already explicitly mentioned in the crate's [feature]
+      # section.
+      maybeAddOptionalFeature = acc: dep:
         if !dep.optional
-        then feats
+        then acc
         else let
           name =
             if dep.rename != null
             then dep.rename
             else dep.name;
         in
-          feats // {${name} = ["dep:${name}"];};
+          if ! (explicitDepFeatures ? ${name})
+          then acc // {${name} = ["dep:${name}"];}
+          else acc;
     in
-      foldl' maybeAddOptionalFeature (cargoToml.features or {}) dependencies;
+      foldl' maybeAddOptionalFeature rawFeatures dependencies;
 
     package = cargoToml.package;
     workspacePackage = workspaceToml.package;
@@ -807,6 +835,28 @@
 
     # cargo defaults to "2015" if missing, for backwards compat.
     edition = tryInherit "edition" "2015";
+
+    # readme  unset  => look for README.md, README.txt, or README in pkg dir
+    # readme  false  => null
+    # readme  true   => assume README.md
+    # readme  "..."  => assume "..."
+    resolvePkgReadme = optReadmeStringOrBool:
+      if optReadmeStringOrBool == null
+      then
+        foldl' (
+          acc: file:
+            if acc != null
+            then acc
+            else if pathExists (src + "/${pkgDirRelPath}/${file}")
+            then file
+            else null
+        )
+        null ["README.md" "README.txt" "README"]
+      else if isString optReadmeStringOrBool
+      then optReadmeStringOrBool
+      else if optReadmeStringOrBool == true
+      then "README.md"
+      else null;
   in {
     # TODO(phlip9): this adds an extra copy of the whole crate dir to the
     # store... try only conditionally adding this?
@@ -842,9 +892,7 @@
     #               workspace root.
     license_file = tryInherit "license-file" null;
     publish = tryInherit "publish" null;
-    # TODO(phlip9): if inherited from workspace, then it's relative to the
-    #               workspace root.
-    readme = tryInherit "readme" null;
+    readme = resolvePkgReadme (tryInherit "readme" null);
     repository = tryInherit "repository" null;
     rust_version = tryInherit "rust-version" null;
   };
@@ -893,9 +941,9 @@
             value = memberManifest;
           }
         ) (
-          if cargoToml ? workspace
-          then workspaceMemberPaths
-          else [""] # top-level crate
+          optionals (cargoToml ? workspace) workspaceMemberPaths
+          # top-level crate
+          ++ optional (cargoToml ? package) ""
         ));
   in
     workspacePkgManifests;
@@ -973,6 +1021,9 @@ in {
       hash = "sha256-7PfNDFDuvQ9T3BeA15FuY1jAprGLsyglWXcNrZvtPAE=";
     };
   };
+
+  # non-trivial binary crate (workspace)
+  ripgrep = mkSmoketest {inherit (pkgs.ripgrep) name src;};
 
   # unit tests
   tests = let

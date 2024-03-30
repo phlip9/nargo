@@ -56,6 +56,7 @@ smoketest:
     just smoketest-pkg pkg-targets
     just smoketest-pkg fd
     just smoketest-pkg rage
+    just smoketest-pkg ripgrep
 
 test:
     nix eval --read-only --show-trace \
