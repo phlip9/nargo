@@ -36,7 +36,6 @@
     hasSuffix
     isDerivation
     isString
-    listToAttrs
     mapAttrsToList
     mapNullable
     optional
@@ -48,7 +47,6 @@
     runTests
     subtractLists
     ;
-  inherit (nocargo-lib.pkg-info) toPkgId;
   inherit (nocargo-lib.glob) globMatchDir;
   inherit (nocargo-lib.support) sanitizeRelativePath;
 
@@ -243,7 +241,7 @@
         json2 = workspacePkgManifests;
         jq2 = stripNewLines ''
           import "lib" as lib;
-          ."${pkg-name}" | lib::cleanPkgManifest
+          . | select(.name == "${pkg-name}") | lib::cleanPkgManifest
         '';
       };
 
@@ -929,7 +927,7 @@
     # Collect workspace packages from workspace Cargo.toml.
     selected = flatten (map (glob: globMatchDir glob src) cargoToml.workspace.members);
     excluded = map sanitizeRelativePath (cargoToml.workspace.exclude or []);
-    workspaceMemberPaths = subtractLists excluded selected;
+    workspaceMemberPaths = subtractLists (excluded ++ [""]) selected;
 
     # We don't distinguish between v1 and v2. But v3 is different from both.
     lockVersion = toInt (cargoLock.version or 3);
@@ -938,36 +936,35 @@
     workspaceToml = cargoToml.workspace or null;
     workspaceDir = src;
 
+    workspacePkgPaths =
+      optionals (cargoToml ? workspace) workspaceMemberPaths
+      # top-level crate
+      ++ optional (cargoToml ? package) "";
+
     # Package manifests for local crates inside the workspace.
     workspacePkgManifests =
-      listToAttrs
-      (map (
-          relativePath: let
-            # Path to cargo workspace member's directory.
-            memberSrc =
-              if relativePath == ""
-              then src
-              else src + "/${relativePath}";
+      map (
+        relativePath: let
+          # Path to cargo workspace member's directory.
+          memberSrc =
+            if relativePath == ""
+            then src
+            else src + "/${relativePath}";
 
-            memberCargoToml =
-              if relativePath != ""
-              then fromTOML (readFile (memberSrc + "/Cargo.toml"))
-              else cargoToml;
-            memberManifest = mkPkgManifest {
-              inherit lockVersion workspaceToml workspaceDir;
-              src = memberSrc;
-              cargoToml = memberCargoToml;
-              pkgDirRelPath = relativePath;
-            };
-          in {
-            name = toPkgId memberCargoToml.package;
-            value = memberManifest;
-          }
-        ) (
-          optionals (cargoToml ? workspace) workspaceMemberPaths
-          # top-level crate
-          ++ optional (cargoToml ? package) ""
-        ));
+          memberCargoToml =
+            if relativePath != ""
+            then fromTOML (readFile (memberSrc + "/Cargo.toml"))
+            else cargoToml;
+          memberManifest = mkPkgManifest {
+            inherit lockVersion workspaceToml workspaceDir;
+            src = memberSrc;
+            cargoToml = memberCargoToml;
+            pkgDirRelPath = relativePath;
+          };
+        in
+          memberManifest
+      )
+      workspacePkgPaths;
   in
     workspacePkgManifests;
   # resolveDepsFromLock
@@ -1050,6 +1047,9 @@ in {
 
   # non-trivial
   hickory-dns = mkSmoketest {inherit (pkgs.trust-dns) name src;};
+
+  # small crate
+  cargo-hack = mkSmoketest {inherit (pkgs.cargo-hack) name src;};
 
   # unit tests
   tests = let

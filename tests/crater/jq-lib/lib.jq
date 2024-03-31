@@ -30,12 +30,12 @@ def cleanCargoMetadataPkgs:
     | map(
         select(.source == null)
         | cleanPkgManifest
-        | { (.name): . }
-    )
-    | add
+      )
+    | sort_by(.id)
     ;
 
 def cleanNocargoMetadataPkgs:
     . 
-    | map_values(cleanPkgManifest)
+    | map(cleanPkgManifest)
+    | sort_by(.id)
     ;
