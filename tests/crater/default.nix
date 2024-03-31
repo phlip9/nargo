@@ -366,7 +366,7 @@
       else null;
   in
     {
-      name = dep.package or name;
+      name = workspaceDep.package or dep.package or name;
       target = target;
 
       optional = dep.optional or false;
@@ -379,6 +379,11 @@
         # use `null` for normal deps to match `cargo metadata` output
         then null
         else kind;
+
+      rename =
+        if (workspaceDep.package or dep.package or null) != null
+        then name
+        else null;
 
       # The required semver version. ex: `^0.1`, `*`, `=3.0.4`, ...
       req = let
@@ -422,17 +427,6 @@
           else if !wdepDef
           then dep.default-features
           else true;
-
-      # See `sanitizeDep`
-      rename = let
-        pkg =
-          if inheritsWorkspace
-          then workspaceDep.package or null
-          else dep.package or null;
-      in
-        if pkg != null
-        then replaceStrings ["-"] ["_"] name
-        else null;
 
       # This is used for dependency resolving inside Cargo.lock.
       source = let
@@ -914,7 +908,13 @@
     # TODO(phlip9): if inherited from workspace, then it's relative to the
     #               workspace root.
     license_file = tryInherit "license-file" null;
-    publish = tryInherit "publish" null;
+    # TODO(phlip9): not sure how this works...
+    publish = let
+      raw = tryInherit "publish" null;
+    in
+      if raw == false
+      then []
+      else raw;
     readme = resolvePkgReadme (tryInherit "readme" null);
     repository = tryInherit "repository" null;
     rust_version = tryInherit "rust-version" null;
