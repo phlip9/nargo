@@ -196,11 +196,11 @@
       [[ -n "$json2Path" ]] && export json2=$json2Path
 
       {
-        diff -u --color=always \
-          <(jq -S "$jq1" "$json1") \
-          <(jq -S "$jq2" "$json2")
+        diff --unified=10 --color=always \
+          <(jq -S -L "${./jq-lib}" "$jq1" "$json1") \
+          <(jq -S -L "${./jq-lib}" "$jq2" "$json2")
       } || {
-        echo "json1 != json2."
+        echo "json1 != json2"
         echo ""
         echo "json1 path: '$json1'"
         echo "json2 path: '$json2'"
@@ -209,13 +209,17 @@
         echo ""
         echo "retry locally with:"
         echo ""
-        echo "\$ diff -u --color=always <(jq -S '$jq1' '$json1') <(jq -S '$jq2' '$json2')"
+        echo "\$ diff --unified=10 --color=always" '\'
+        echo "     <(jq -S -L ./tests/crater/jq-lib '$jq1' '$json1')" '\'
+        echo "     <(jq -S -L ./tests/crater/jq-lib '$jq2' '$json2')"
         echo ""
         exit 1
       }
 
       touch $out
     '';
+
+  stripNewLines = str: replaceStrings ["\n"] [" "] str;
 
   mkSmoketest = {
     src,
@@ -227,20 +231,38 @@
       tree = cargoTree {inherit pkgs name src;};
       unitGraph = cargoUnitGraph {inherit pkgs name src;};
       workspacePkgManifests = mkWorkspacePkgManifests {src = src;};
+
+      # diff a specific package's `cargo metadata` with our `mkPkgManifest`
       diffPkgManifest = assertJsonDrvEq {
         name = "${name}-${pkg-name}";
         json1 = metadata;
-        jq1 = ''.packages[] | select(.name == "${pkg-name}")'';
+        jq1 = stripNewLines ''
+          import "lib" as lib;
+          .packages[] | select(.name == "${pkg-name}") | lib::cleanPkgManifest
+        '';
         json2 = workspacePkgManifests;
-        jq2 = ''."${pkg-name}"'';
+        jq2 = stripNewLines ''
+          import "lib" as lib;
+          ."${pkg-name}" | lib::cleanPkgManifest
+        '';
       };
+
+      # diff all workspace package `cargo metadata` with our
+      # `mkWorkspacePkgManifests`.
       diffPkgManifests = assertJsonDrvEq {
         name = "${name}";
         json1 = metadata;
-        jq1 = ''.packages | map(select(.source == null) | { (.name): . }) | add'';
+        jq1 = stripNewLines ''
+          import "lib" as lib;
+          .packages | lib::cleanCargoMetadataPkgs
+        '';
         json2 = workspacePkgManifests;
-        jq2 = ''.'';
+        jq2 = stripNewLines ''
+          import "lib" as lib;
+          . | lib::cleanNocargoMetadataPkgs
+        '';
       };
+
       # workspaceManifest = mkWorkspaceInheritableManifest {
       #   lockVersion = 3;
       #   cargoToml = fromTOML (readFile (src + "/Cargo.toml"));
@@ -460,9 +482,11 @@
     else
       foldlAttrs (
         acc: name: kind: let
+          notDotfile = !(hasPrefix "." name);
+
           # ex: src/bin/mybin.rs
           topLevel = "${dir}/${name}";
-          isTopLevelTarget = kind == "regular" && hasSuffix ".rs" name;
+          isTopLevelTarget = kind == "regular" && hasSuffix ".rs" name && notDotfile;
           topLevelTarget = {
             name = removeSuffix ".rs" name;
             path = topLevel;
@@ -470,7 +494,7 @@
 
           # ex: src/bin/mybin/main.rs
           subdirMain = "${dir}/${name}/main.rs";
-          isSubdirTarget = kind == "directory" && (pathExists (src + "/${subdirMain}"));
+          isSubdirTarget = kind == "directory" && notDotfile && pathExists (src + "/${subdirMain}");
           subdirTarget = {
             name = name;
             path = subdirMain;
@@ -675,8 +699,6 @@
     cargoToml,
   }: let
     package = cargoToml.package;
-
-    # kinds = ["lib" "bin" "custom-build" "test" "example" "bench"];
     name = package.name;
 
     tomlTargetLib =
@@ -833,9 +855,6 @@
             workspacePackage.${propName}
         else prop;
 
-    # cargo defaults to "2015" if missing, for backwards compat.
-    edition = tryInherit "edition" "2015";
-
     # readme  unset  => look for README.md, README.txt, or README in pkg dir
     # readme  false  => null
     # readme  true   => assume README.md
@@ -857,21 +876,25 @@
       else if optReadmeStringOrBool == true
       then "README.md"
       else null;
+
+    # cargo defaults to "2015" if missing, for backwards compat.
+    edition = tryInherit "edition" "2015";
+
+    # We can inherit the package version from the workspace
+    version = tryInherit "version" (throw "nocargo: package manifest is missing the `version` field");
   in {
     # TODO(phlip9): this adds an extra copy of the whole crate dir to the
     # store... try only conditionally adding this?
     dependencies = dependencies;
     edition = edition;
     features = features;
-    id = "${package.name} ${package.version} (path+file://" + src + ")";
+    id = "${package.name} ${version} (path+file://" + src + ")";
     links = package.links or null;
     manifest_path = src + "/Cargo.toml";
     name = package.name;
     source = null;
     targets = mkPkgTargets {inherit src edition cargoToml;};
-
-    # We can inherit the package version from the workspace
-    version = tryInherit "version" (throw "nocargo: package manifest is missing the `version` field");
+    version = version;
 
     #
     # Extra fields needed to match `cargo metadata` output.
@@ -1024,6 +1047,9 @@ in {
 
   # non-trivial binary crate (workspace)
   ripgrep = mkSmoketest {inherit (pkgs.ripgrep) name src;};
+
+  # non-trivial
+  hickory-dns = mkSmoketest {inherit (pkgs.trust-dns) name src;};
 
   # unit tests
   tests = let

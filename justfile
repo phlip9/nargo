@@ -1,4 +1,21 @@
-metadata pkg:
+clean-cargo-metadata pkg:
+    jq --sort-keys -L ./tests/crater/jq-lib '\
+        import "lib" as lib; \
+        .packages | lib::cleanCargoMetadataPkgs' \
+        "{{ pkg }}.cargo-metadata.json"
+
+clean-workspace-manifests pkg:
+    jq --sort-keys -L ./tests/crater/jq-lib '\
+        import "lib" as lib; \
+        . | lib::cleanNocargoMetadataPkgs' \
+        "{{ pkg }}.workspace-manifests.json"
+
+diff-clean-metadata-manifests pkg: 
+    diff --unified=10 --color=always \
+        <(just clean-cargo-metadata "{{ pkg }}") \
+        <(just clean-workspace-manifests "{{ pkg }}")
+
+cargo-metadata pkg:
     nix build .#crater.x86_64-linux."{{ pkg }}".metadata
     cat ./result \
         | jq -S . \
@@ -57,6 +74,7 @@ smoketest:
     just smoketest-pkg fd
     just smoketest-pkg rage
     just smoketest-pkg ripgrep
+    just smoketest-pkg hickory-dns
 
 test:
     nix eval --read-only --show-trace \
