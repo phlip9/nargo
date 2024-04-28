@@ -43,29 +43,21 @@ workspace-manifests-dbg-copies pkg:
         1> /dev/null \
         | grep "copied"
 
-diff-metadata-manifest pkg crate:
-    diff -u --color=always \
-        <(jq -S '.packages[] | select(.name == "{{ crate }}")' "{{ pkg }}.cargo-metadata.json") \
-        <(jq -S '."{{ crate }}"' "{{ pkg }}.workspace-manifests.json")
+workspace-pkg-infos pkg:
+    nix eval --json --read-only --show-trace .#crater.x86_64-linux."{{ pkg }}".workspacePkgInfos \
+        | jq -S . \
+        | tee /dev/stderr \
+        > "{{ pkg }}.workspace-pkg-infos.json"
 
-diff-metadata-manifests pkg:
-    diff -u --color=always \
-        <(jq -S '.packages | map(select(.source == null) | { (.name): . }) | add' "{{ pkg }}.cargo-metadata.json") \
-        <(jq -S '.' "{{ pkg }}.workspace-manifests.json")
-
-smoketest2:
-    # just smoketest-pkg2 features simple-features
-    # just smoketest-pkg2 fd fd-find
-    # just smoketest-pkg2 workspace-inline bar
-    just smoketest-pkg2 pkg-targets pkg-targets
-
-smoketest-pkg2 pkg crate:
-    just metadata {{ pkg }}
-    just workspace-manifests {{ pkg }}
-    just diff-metadata-manifests {{ pkg }} {{ crate }}
+workspace-pkg-infos2 pkg:
+    nix eval --json --read-only --show-trace .#crater.x86_64-linux."{{ pkg }}".workspacePkgInfos2 \
+        | jq -S . \
+        | tee /dev/stderr \
+        > "{{ pkg }}.workspace-pkg-infos2.json"
 
 smoketest-pkg pkg:
-    nix build -L --show-trace .#crater.x86_64-linux."{{ pkg }}".diffPkgManifests
+    # nix build -L --show-trace .#crater.x86_64-linux."{{ pkg }}".diffPkgManifests
+    nix build -L --show-trace .#crater.x86_64-linux."{{ pkg }}".diffPkgInfos
 
 smoketest-pkg-dbg pkg:
     nix build -L --show-trace --debugger --impure --ignore-try \

@@ -10,6 +10,7 @@
   inherit
     (builtins)
     all
+    any
     attrValues
     baseNameOf
     concatLists
@@ -48,6 +49,7 @@
     subtractLists
     ;
   inherit (nocargo-lib.glob) globMatchDir;
+  inherit (nocargo-lib.pkg-info) mkPkgInfoFromCargoToml;
   inherit (nocargo-lib.support) sanitizeRelativePath;
 
   # dbg = x: builtins.trace x x;
@@ -110,9 +112,10 @@
         --format-version=1 \
         --frozen --offline --locked \
         --manifest-path="${src}/Cargo.toml" \
-        --filter-platform="${pkgs.stdenv.hostPlatform.rust.rustcTarget}" \
         > $out
     '';
+  # TODO(phlip9): add ability to eval with platform filter for faster eval?
+  # --filter-platform="${pkgs.stdenv.hostPlatform.rust.rustcTarget}" \
 
   # Run `cargo tree` on a crate or workspace in `src`.
   cargoTree = {
@@ -134,10 +137,10 @@
         -vv \
         --frozen --offline --locked \
         --manifest-path="${src}/Cargo.toml" \
-        --target="${pkgs.stdenv.hostPlatform.rust.rustcTarget}" \
         --edges=normal,build,features \
         > $out
     '';
+  # --target="${pkgs.stdenv.hostPlatform.rust.rustcTarget}" \
 
   # Run `cargo build --unit-graph` on a crate or workspace in `src`.
   cargoUnitGraph = {
@@ -229,6 +232,8 @@
       tree = cargoTree {inherit pkgs name src;};
       unitGraph = cargoUnitGraph {inherit pkgs name src;};
       workspacePkgManifests = mkWorkspacePkgManifests {src = src;};
+      workspacePkgInfos = mkWorkspacePkgInfos {src = src;};
+      workspacePkgInfos2 = map mkPkgInfoFromPkgManifest workspacePkgManifests;
 
       # diff a specific package's `cargo metadata` with our `mkPkgManifest`
       diffPkgManifest = assertJsonDrvEq {
@@ -261,10 +266,13 @@
         '';
       };
 
-      # workspaceManifest = mkWorkspaceInheritableManifest {
-      #   lockVersion = 3;
-      #   cargoToml = fromTOML (readFile (src + "/Cargo.toml"));
-      # };
+      # diff all workspace `PkgInfo` derived using existing nocargo method and
+      # `PkgManifest` -> `PkgInfo` method.
+      diffPkgInfos = assertJsonDrvEq {
+        name = "${name}-pkginfos";
+        json1 = workspacePkgInfos;
+        json2 = workspacePkgInfos2;
+      };
     }) "${src}"; # hack to make evaluation and derivation use same dir
   # })
   # src;
@@ -918,90 +926,96 @@
     rust_version = tryInherit "rust-version" null;
   };
 
-  # Parse package manifests all local crates inside the workspace.
-  mkWorkspacePkgManifests = {
-    src ? throw "require package src",
-    cargoToml ? fromTOML (readFile (src + "/Cargo.toml")),
-    cargoLock ? fromTOML (readFile (src + "/Cargo.lock")),
+  # target :: deserializeTomlPkgTarget
+  targetIsProcMacro = target:
+    target.kind == ["lib"] && target.crate_types == ["proc-macro"];
+
+  # Create a nocargo `PkgInfo` from a `PkgManifest` (which closely matches the
+  # cargo metadata output).
+  mkPkgInfoFromPkgManifest = manifest: {
+    name = manifest.name;
+    version = manifest.version;
+    links = manifest.links;
+    src = dirOf manifest.manifest_path;
+    features = manifest.features;
+    dependencies = manifest.dependencies;
+    procMacro = any targetIsProcMacro manifest.targets;
+  };
+
+  # deserializeWorkspaceCargoTomls :: { src: Path, cargoToml: AttrSet }
+  #   -> List<{ relativePath: String, src: Path, cargoToml: AttrSet }>
+  #
+  # From the workspace Cargo.toml, find all workspace members and deserialize
+  # each member Cargo.toml.
+  deserializeWorkspaceCargoTomls = {
+    # The workspace source directory.
+    src,
+    # The deserialized workspace root Cargo.toml.
+    cargoToml,
   }: let
     # Collect workspace packages from workspace Cargo.toml.
     selected = flatten (map (glob: globMatchDir glob src) cargoToml.workspace.members);
     excluded = map sanitizeRelativePath (cargoToml.workspace.exclude or []);
     workspaceMemberPaths = subtractLists (excluded ++ [""]) selected;
 
-    # We don't distinguish between v1 and v2. But v3 is different from both.
-    lockVersion = toInt (cargoLock.version or 3);
+    workspacePkgPaths =
+      optionals (cargoToml ? workspace) workspaceMemberPaths
+      # top-level crate
+      ++ optional (cargoToml ? package) "";
+  in
+    map (relativePath: let
+      memberSrc =
+        if relativePath == ""
+        then src
+        else src + "/${relativePath}";
+    in {
+      # The relative path to the workspace member directory, inside the workspace.
+      relativePath = relativePath;
+
+      # Path to cargo workspace member's directory.
+      src = memberSrc;
+
+      # The parsed workspace member's Cargo.toml manifest file
+      cargoToml =
+        if relativePath != ""
+        then fromTOML (readFile (memberSrc + "/Cargo.toml"))
+        else cargoToml;
+    })
+    workspacePkgPaths;
+
+  # Parse package manifests from all local crates inside the workspace.
+  mkWorkspacePkgManifests = {
+    src ? throw "require package src",
+    cargoToml ? fromTOML (readFile (src + "/Cargo.toml")),
+    cargoLock ? fromTOML (readFile (src + "/Cargo.lock")),
+  }: let
+    # We don't distinguish between v1 and v2. But v3+ is different from both.
+    lockVersion = toInt (cargoLock.version or 2);
 
     # The [workspace] section in the root Cargo.toml (or null if there is none).
     workspaceToml = cargoToml.workspace or null;
     workspaceDir = src;
 
-    workspacePkgPaths =
-      optionals (cargoToml ? workspace) workspaceMemberPaths
-      # top-level crate
-      ++ optional (cargoToml ? package) "";
-
-    # Package manifests for local crates inside the workspace.
-    workspacePkgManifests =
-      map (
-        relativePath: let
-          # Path to cargo workspace member's directory.
-          memberSrc =
-            if relativePath == ""
-            then src
-            else src + "/${relativePath}";
-
-          memberCargoToml =
-            if relativePath != ""
-            then fromTOML (readFile (memberSrc + "/Cargo.toml"))
-            else cargoToml;
-          memberManifest = mkPkgManifest {
-            inherit lockVersion workspaceToml workspaceDir;
-            src = memberSrc;
-            cargoToml = memberCargoToml;
-            pkgDirRelPath = relativePath;
-          };
-        in
-          memberManifest
-      )
-      workspacePkgPaths;
+    workspaceCargoTomls = deserializeWorkspaceCargoTomls {inherit src cargoToml;};
   in
-    workspacePkgManifests;
-  # resolveDepsFromLock
-  #
-  # gitSrcInfos = {}; # : Attrset PkgInfo
-  # registries = {}; # : Attrset Registry
-  #
-  # getPkgInfo = {
-  #   source ? null,
-  #   name,
-  #   version,
-  #   ...
-  # } @ args: let
-  #   m = match "(registry|git)\\+([^#]*).*" source;
-  #   kind = elemAt m 0;
-  #   url = elemAt m 1;
-  # in
-  #   # Local crates have no `source`.
-  #   if source == null
-  #   then
-  #     localSrcInfos.${toPkgId args}
-  #     or (throw "Local crate is outside the workspace: ${toPkgId args}")
-  #     // {isLocalPkg = true;}
-  #   else if m == null
-  #   then throw "Invalid source: ${source}"
-  #   else if kind == "registry"
-  #   then
-  #     getPkgInfoFromIndex
-  #     (registries.${url}
-  #       or (throw "Registry `${url}` not found. Please define it in `extraRegistries`."))
-  #     args
-  #     // {inherit source;} # `source` is for crate id, which is used for overrides.
-  #   else if kind == "git"
-  #   then
-  #     gitSrcInfos.${url}
-  #     or (throw "Git source `${url}` not found. Please define it in `gitSrcs`.")
-  #   else throw "Invalid source: ${source}";
+    # Package manifests for local crates inside the workspace.
+    map (member:
+      mkPkgManifest {
+        inherit lockVersion workspaceToml workspaceDir;
+        src = member.src;
+        cargoToml = member.cargoToml;
+        pkgDirRelPath = member.relativePath;
+      })
+    workspaceCargoTomls;
+
+  # Parse package infos from all local crates inside the workspace.
+  mkWorkspacePkgInfos = {
+    src ? throw "require package src",
+    cargoToml ? fromTOML (readFile (src + "/Cargo.toml")),
+  }:
+    map
+    (member: mkPkgInfoFromCargoToml member.cargoToml member.src)
+    (deserializeWorkspaceCargoTomls {inherit src cargoToml;});
 in {
   # test Cargo.toml features
   features = mkSmoketest {
