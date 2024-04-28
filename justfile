@@ -1,3 +1,7 @@
+# auto-format the `justfile`
+just-fmt:
+    just --fmt --unstable
+
 clean-cargo-metadata pkg:
     jq --sort-keys -L ./tests/crater/jq-lib '\
         import "lib" as lib; \
@@ -10,7 +14,7 @@ clean-workspace-manifests pkg:
         . | lib::cleanNocargoMetadataPkgs' \
         "{{ pkg }}.workspace-manifests.json"
 
-diff-clean-metadata-manifests pkg: 
+diff-clean-metadata-manifests pkg:
     diff --unified=10 --color=always \
         <(just clean-cargo-metadata "{{ pkg }}") \
         <(just clean-workspace-manifests "{{ pkg }}")
