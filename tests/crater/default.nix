@@ -24,7 +24,6 @@
     readDir
     readFile
     substring
-    toInt
     toJSON
     ;
   inherit
@@ -47,6 +46,7 @@
     replaceStrings
     runTests
     subtractLists
+    toInt
     ;
   inherit (nocargo-lib.glob) globMatchDir;
   inherit (nocargo-lib.pkg-info) mkPkgInfoFromCargoToml;
@@ -930,6 +930,26 @@
   targetIsProcMacro = target:
     target.kind == ["lib"] && target.crate_types == ["proc-macro"];
 
+  mkPkgInfoDepFromPkgManifestDep = dep: {
+    default_features = dep.uses_default_features;
+    features = dep.features;
+    kind = if dep.kind == null then "normal" else dep.kind;
+    name = if dep.rename != null then dep.rename else dep.name;
+    optional = dep.optional;
+    package = dep.name;
+    req =
+      if dep.req == "*" then
+        null
+      else if hasPrefix "^" dep.req then
+        removePrefix "^" dep.req
+      else
+        dep.req;
+    source = dep.source;
+    target = dep.target;
+  } // optionalAttrs (dep.rename != null) {
+    rename = replaceStrings ["-"] ["_"] dep.rename;
+  };
+
   # Create a nocargo `PkgInfo` from a `PkgManifest` (which closely matches the
   # cargo metadata output).
   mkPkgInfoFromPkgManifest = manifest: {
@@ -938,7 +958,7 @@
     links = manifest.links;
     src = dirOf manifest.manifest_path;
     features = manifest.features;
-    dependencies = manifest.dependencies;
+    dependencies = map mkPkgInfoDepFromPkgManifestDep manifest.dependencies;
     procMacro = any targetIsProcMacro manifest.targets;
   };
 
@@ -990,7 +1010,7 @@
     cargoLock ? fromTOML (readFile (src + "/Cargo.lock")),
   }: let
     # We don't distinguish between v1 and v2. But v3+ is different from both.
-    lockVersion = toInt (cargoLock.version or 2);
+    lockVersion = cargoLock.version or 2;
 
     # The [workspace] section in the root Cargo.toml (or null if there is none).
     workspaceToml = cargoToml.workspace or null;
@@ -1032,6 +1052,13 @@ in {
   # test parsing cargo package targets with both explicit and autodiscovered
   # targets
   pkg-targets = mkSmoketest {src = ../pkg-targets;};
+
+  # TODO(phlip9): unbreak crane w/ www.github.com registry
+  # # package renames + v3 lock file
+  # dependency-v3 = mkSmoketest {
+  #   src = ../dependency-v3;
+  #   pkg-name = "dependencies";
+  # };
 
   # non-trivial binary crate (not workspace)
   fd = mkSmoketest {

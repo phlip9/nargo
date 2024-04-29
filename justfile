@@ -67,6 +67,7 @@ smoketest:
     just smoketest-pkg features
     just smoketest-pkg workspace-inline
     just smoketest-pkg pkg-targets
+    # just smoketest-pkg dependency-v3
     just smoketest-pkg fd
     just smoketest-pkg rage
     just smoketest-pkg ripgrep
