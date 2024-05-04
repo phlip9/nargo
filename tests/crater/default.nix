@@ -46,7 +46,6 @@
     replaceStrings
     runTests
     subtractLists
-    toInt
     ;
   inherit (nocargo-lib.glob) globMatchDir;
   inherit (nocargo-lib.pkg-info) mkPkgInfoFromCargoToml;
@@ -95,11 +94,12 @@
   cargoMetadata = {
     pkgs,
     src,
+    cargoVendorDir,
     name,
   }:
     pkgs.runCommandLocal "${name}.cargo-metadata.json" {
+      inherit cargoVendorDir;
       nativeBuildInputs = [pkgs.cargo];
-      cargoVendorDir = craneLib.vendorCargoDeps {cargoLock = "${src}/Cargo.lock";};
     } ''
       export CARGO_TARGET_DIR="$PWD/target"
 
@@ -121,11 +121,12 @@
   cargoTree = {
     pkgs,
     src,
+    cargoVendorDir,
     name,
   }:
     pkgs.runCommandLocal "${name}.cargo-tree" {
+      inherit cargoVendorDir;
       nativeBuildInputs = [pkgs.cargo];
-      cargoVendorDir = craneLib.vendorCargoDeps {cargoLock = "${src}/Cargo.lock";};
     } ''
       export CARGO_TARGET_DIR="$PWD/target"
 
@@ -146,11 +147,12 @@
   cargoUnitGraph = {
     pkgs,
     src,
+    cargoVendorDir,
     name,
   }:
     pkgs.runCommandLocal "${name}.cargo-unit-graph.json" {
+      inherit cargoVendorDir;
       nativeBuildInputs = [pkgs.cargo];
-      cargoVendorDir = craneLib.vendorCargoDeps {cargoLock = "${src}/Cargo.lock";};
     } ''
       export CARGO_TARGET_DIR="$PWD/target"
 
@@ -224,15 +226,20 @@
 
   mkSmoketest = {
     src,
+    cargoToml ? fromTOML (readFile (src + "/Cargo.toml")),
+    cargoLock ? fromTOML (readFile (src + "/Cargo.lock")),
     name ? baseNameOf src,
     pkg-name ? name,
   }:
     (src: rec {
-      metadata = cargoMetadata {inherit pkgs name src;};
-      tree = cargoTree {inherit pkgs name src;};
-      unitGraph = cargoUnitGraph {inherit pkgs name src;};
-      workspacePkgManifests = mkWorkspacePkgManifests {src = src;};
-      workspacePkgInfos = mkWorkspacePkgInfos {src = src;};
+      cargoVendorDir = craneLib.vendorCargoDeps {cargoLockParsed = cargoLock;};
+
+      metadata = cargoMetadata {inherit cargoVendorDir name pkgs src;};
+      tree = cargoTree {inherit cargoVendorDir name pkgs src;};
+      unitGraph = cargoUnitGraph {inherit cargoVendorDir name pkgs src;};
+
+      workspacePkgManifests = mkWorkspacePkgManifests {inherit src cargoToml cargoLock;};
+      workspacePkgInfos = mkWorkspacePkgInfos {inherit src cargoToml;};
       workspacePkgInfos2 = map mkPkgInfoFromPkgManifest workspacePkgManifests;
 
       # diff a specific package's `cargo metadata` with our `mkPkgManifest`
@@ -315,6 +322,11 @@
       pkgDirRelPath
       (builtins.split "/" depRelPath));
 
+  canonicalAppendPath = dir: relPath:
+    if relPath == ""
+    then dir
+    else dir + "/${relPath}";
+
   # A parsed dependency from a Cargo.toml manifest.
   #
   # See: <https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html>
@@ -365,10 +377,12 @@
       if inheritsWorkspace
       then
         if workspaceDep ? path
-        then (workspaceDir + "/${workspaceDep.path}")
+        # then (workspaceDir + "/${workspaceDep.path}")
+        then (canonicalAppendPath workspaceDir workspaceDep.path)
         else null
       else if dep ? path
-      then (workspaceDir + "/" + (canonicalizeDepPath pkgDirRelPath "${dep.path}"))
+      # then (workspaceDir + ("/" + (canonicalizeDepPath pkgDirRelPath "${dep.path}")))
+      then (canonicalAppendPath workspaceDir (canonicalizeDepPath pkgDirRelPath dep.path))
       else null;
   in
     {
@@ -1091,6 +1105,24 @@ in {
 
   # small crate
   cargo-hack = mkSmoketest {inherit (pkgs.cargo-hack) name src;};
+
+  # non-trivial library (workspace)
+  rand = mkSmoketest rec {
+    name = "rand";
+    src = let
+      src' = pkgs.fetchFromGitHub {
+        owner = "rust-random";
+        repo = name;
+        rev = "bf0301bfe6d2360e6c86a6c58273f7069f027691"; # 2024-04-27
+        hash = "sha256-ahiydkkJHwUX13eiGh2aCRSofbxvevk22oKMgLMOl2g=";
+      };
+    in
+      pkgs.runCommandLocal "rand-patched" { src_raw = src'; } ''
+        mkdir -p $out
+        cp -r $src_raw/* $out/
+        cp $src_raw/Cargo.lock.msrv $out/Cargo.lock
+      '';
+  };
 
   # unit tests
   tests = let

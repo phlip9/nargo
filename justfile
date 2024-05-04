@@ -73,6 +73,7 @@ smoketest:
     just smoketest-pkg ripgrep
     just smoketest-pkg hickory-dns
     just smoketest-pkg cargo-hack
+    just smoketest-pkg rand
 
 test:
     nix eval --read-only --show-trace \
