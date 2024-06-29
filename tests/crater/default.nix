@@ -1,7 +1,6 @@
 {
-  self,
-  pkgs,
   inputs,
+  pkgs,
 }: let
   lib = inputs.nixpkgs.lib;
   nocargo-lib = import ../../lib {inherit lib;};
