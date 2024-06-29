@@ -1,0 +1,37 @@
+# backup files
+*~
+,*
+.*.swp
+.*.swo
+.\#*
+\#*\#
+
+# IDEs
+.idea/
+.vscode/
+
+# Cargo-generated compiled files and executables
+debug/
+target/
+
+# ctags
+tags
+
+# nix derivation outputs
+.nixos-test-history
+outputs/
+repl-result-*
+result
+result-*
+
+# macOS
+.DS_Store
+
+# direnv cache
+/.direnv
+
+# nix derivation result link
+/result
+
+# home-manager generated coc-settings for this repo.
+/.vim/coc-settings.json
