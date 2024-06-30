@@ -1,6 +1,7 @@
 {
   craneLib,
   nargoLib,
+  pkgs,
 }: {
-  examples = import ./examples {inherit craneLib nargoLib;};
+  examples = import ./examples {inherit craneLib nargoLib pkgs;};
 }
