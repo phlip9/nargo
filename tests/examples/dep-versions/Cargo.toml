@@ -1,0 +1,12 @@
+[package]
+name = "dep-versions"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+nom = "7.1"
+
+[target.'cfg(not(target_arch = "x86_64"))'.dependencies]
+nom = "6.0"

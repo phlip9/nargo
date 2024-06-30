@@ -20,6 +20,7 @@ in {
 
   hello-world-bin = mkExample {src = ./hello-world-bin;};
   pkg-targets = mkExample {src = ./pkg-targets;};
+  dep-versions = mkExample {src = ./dep-versions;};
 
   #
   # External crates

@@ -1,6 +1,7 @@
 # Run `cargo metadata` on a crate or workspace in `src`.
 {
   cargo,
+  jq,
   pkgsBuildBuild,
 }:
 #
@@ -10,7 +11,7 @@
 }:
 #
 pkgsBuildBuild.runCommandLocal "Cargo.metadata.json" {
-  depsBuildBuild = [cargo];
+  depsBuildBuild = [cargo jq];
   env.cargoVendorDir = cargoVendorDir;
 } ''
   export CARGO_TARGET_DIR="$PWD/target"
@@ -23,5 +24,10 @@ pkgsBuildBuild.runCommandLocal "Cargo.metadata.json" {
     --offline \
     --locked \
     --format-version=1 \
+    | jq --indent 1 \
+      --arg src "${src}" \
+      --arg cargoVendorDir "$cargoVendorDir" \
+      -L "${./jq}" \
+      'import "lib" as lib; . | lib::cleanCargoMetadata' \
     > $out
 ''
