@@ -18,9 +18,10 @@ in {
   # Internal example crates
   #
 
+  dep-versions = mkExample {src = ./dep-versions;};
+  dependency-v3 = mkExample {src = ./dependency-v3;};
   hello-world-bin = mkExample {src = ./hello-world-bin;};
   pkg-targets = mkExample {src = ./pkg-targets;};
-  dep-versions = mkExample {src = ./dep-versions;};
 
   #
   # External crates
