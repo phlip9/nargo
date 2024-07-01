@@ -1,11 +1,57 @@
 # Arguments from jq invocation:
 #
-#   $src : source directory
-#   $cargoVendorDir : vendored crates directory
+#   $src : workspace source directory
+
+# From an object, filter out all entries where the value is `null`
+def filterNonNull: with_entries(select(.value != null));
 
 def cleanCratesRegistry:
     .
-    | sub("^registry\\+https://github\\.com/rust-lang/crates\\.io-index"; "registry+crates.io")
+    | sub("^registry\\+https://github\\.com/rust-lang/crates\\.io-index"; "crates-io")
+    ;
+
+# ex: "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/age#0.10.0" -> "age#0.10.0"
+# ex: "registry+https://github.com/rust-lang/crates.io-index#aes-gcm@0.10.3" -> "crates-io#aes-gcm@0.10.3"
+# ex: "path+file:///nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source#dependencies@0.0.0" -> "#dependencies@0.0.0"
+def cleanPkgId:
+    .
+    | if (startswith("registry+")) then
+        # shorten the standard crates.io registry url
+        cleanCratesRegistry
+      elif (startswith ("path+file://")) then
+        # remove source paths
+        (ltrimstr("path+file://\($src)") | ltrimstr("/"))
+      else
+        .
+      end
+    ;
+
+# Clean a single target in a package manifest.
+def cleanPkgManifestTarget($isWorkspacePkg; $manifestDir):
+    .
+    | {
+        name: .name,
+        kind: .kind,
+        crate_types: .crate_types,
+        src_path: .src_path | ltrimstr($manifestDir),
+        edition: .edition,
+        required_features: .required_features,
+      }
+    # Remove irrelevant targets from non-workspace crates
+    | select(
+        $isWorkspacePkg
+        or (.kind | any(. == "lib" or . == "proc-macro" or . == "custom-build"))
+      )
+    ;
+
+# Clean a package manifest's targets.
+def cleanPkgManifestTargets($isWorkspacePkg; $manifestDir):
+    .
+    | map(cleanPkgManifestTarget($isWorkspacePkg; $manifestDir))
+    # Unfortunately, the `cargo metadata` output for package targets is
+    # non-deterministic (read: filesystem dependent), so we need to sort them
+    # first.
+    | sort_by(.kind, .name)
     ;
 
 def cleanPkgSource:
@@ -16,96 +62,102 @@ def cleanPkgSource:
 
 def cleanPkgPath:
     .
-    | if . != null then (. | split($src) | join("src"))
-      else null end
+    | if . != null then (ltrimstr($src) | ltrimstr("/")) else . end
     ;
 
-def cleanPkgId:
+# Clean a single dependency entry in a package manifest.
+def cleanPkgManifestDep:
     .
-    # remove source paths
-    | split("path+file://\($src)/") | join("path+file://")
-    # shorten crates.io registry
-    | cleanCratesRegistry
+    | .source = (.source | cleanPkgSource)
+    | .path = (.path | cleanPkgPath)
+    | filterNonNull
     ;
 
-def cleanPkgTargetSrcPath:
+# Clean all dependency entries in a package manifest.
+def cleanPkgManifestDeps:
     .
-    | ltrimstr("\($src)/")
-    | if (startswith("\($cargoVendorDir)/"))
-      then (ltrimstr("\($cargoVendorDir)/") | split("/") | .[2:] | join("/"))
-      else . end
+    | map(cleanPkgManifestDep)
     ;
 
-# Clean a single target in a package.
-def cleanPkgTarget($isWorkspacePkg):
-    .
-    | {
-        name: .name,
-        kind: .kind[0],
-        crate_types: .crate_types[0],
-        src_path: .src_path,# | cleanPkgTargetSrcPath,
-        edition: .edition,
-        required_features: .required_features,
-      }
-    # Remove irrelevant targets from non-workspace crates
-    | select($isWorkspacePkg or .kind == "lib" or .kind == "proc-macro" or .kind == "custom-build")
-    ;
-
-# Clean a package's targets.
-def cleanPkgTargets($isWorkspacePkg):
-    .
-    | map(cleanPkgTarget($isWorkspacePkg))
-    # Unfortunately, the `cargo metadata` output for package targets is
-    # non-deterministic (read: filesystem dependent), so we need to sort them
-    # first.
-    | sort_by(.kind, .name)
-    ;
-
-# Clean a single dependency entry in a package
-def cleanPkgDependency:
-    .
-    # | .source = (.source | cleanPkgSource)
-    # | .path = (.path | cleanPkgPath)
-    | with_entries(select(.value != null))
-    ;
-
-# Clean all dependency entries in a package
-def cleanPkgDependencies:
-    .
-    | map(cleanPkgDependency)
-    ;
-
-# Clean a single package manifest
+# Clean a single package manifest.
+# A package manifest is effectively a deserialized `Cargo.toml` with some light
+# processing.
 def cleanPkgManifest:
     (.source == null) as $isWorkspacePkg
+    | (.manifest_path | rtrimstr("Cargo.toml")) as $manifestDir
     | {
         name: .name,
         version: .version,
-        id: .id,# | cleanPkgId,
-        source: .source,# | cleanPkgSource,
+        id: .id | cleanPkgId,
+        source: .source | cleanPkgSource,
         links: .links,
         default_run: .default_run,
         rust_version: .rust_version,
         edition: .edition,
         features: .features,
-        dependencies: .dependencies | cleanPkgDependencies,
-        targets: .targets | cleanPkgTargets($isWorkspacePkg),
+        dependencies: .dependencies | cleanPkgManifestDeps,
+        targets: .targets | cleanPkgManifestTargets($isWorkspacePkg; $manifestDir),
       }
-    | with_entries(select(.value != null))
+    | filterNonNull
     ;
 
-# Clean `cargo metadata` .packages
-def cleanPkgs:
+# Clean all package manifests
+def cleanPkgManifests:
     .
     | map(cleanPkgManifest)
-    | sort_by(.name, .version, .id)
+    | sort_by(.id)
+    | INDEX(.id)
+    ;
+
+def cleanPkgDepKinds:
+    .
+    | map(filterNonNull) # | select(length > 0))
+    # | select(length > 0)
+    ;
+
+def cleanPkgDep:
+    .
+    | {
+        name: .name,
+        id: .pkg | cleanPkgId,
+        dep_kinds: .dep_kinds | cleanPkgDepKinds,
+      }
+    ;
+
+def cleanPkg:
+    .
+    | {
+        id: .id | cleanPkgId,
+        dependencies: .dependencies | map(cleanPkgId) | sort,
+        deps: .deps | map(cleanPkgDep) | sort_by(.id),
+      }
+    ;
+
+# Clean `cargo metadata` resolved packages
+def cleanPkgs:
+    .
+    | map(cleanPkg)
+    | sort_by(.id)
+    | INDEX(.id)
+    ;
+
+def cleanWorkspaceMembers:
+    .
+    | map(cleanPkgId)
+    | sort
     ;
 
 # Clean `cargo metadata` output
 def cleanCargoMetadata:
     .
+    # Start by cleaning most of the structs of irrelevant info, cleaning up
+    # the pkgId's
     | {
-        packages: (.packages | cleanPkgs),
-        version: .version,
+        workspace_members: .workspace_members | cleanWorkspaceMembers,
+        workspace_default_members: .workspace_default_members | cleanWorkspaceMembers,
+        pkgs: (.resolve.nodes | cleanPkgs),
+        manifests: (.packages | cleanPkgManifests),
       }
     ;
+
+
