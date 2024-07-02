@@ -59,7 +59,7 @@ pkgsBuildBuild.runCommandLocal "cargo-metadata" {
     --indent 1 \
     --arg src "${src}" \
     -L "${./jq}" \
-    'import "lib" as lib; . | lib::cleanCargoMetadata' \
+    'import "lib" as lib; . | lib::genCargoMetadata' \
     "$out/Cargo.metadata.raw.json" \
     > $out/Cargo.metadata.json
 
