@@ -55,12 +55,30 @@ pkgsBuildBuild.runCommandLocal "cargo-metadata" {
 
   # "$out/Cargo.vendor.json"
   # "$out/Cargo.lock.json"
+
+  # Generate the `Cargo.metadata.json` file with jq.
+  #
+  # Includes this incredible/horrifying awk script that tightens up jq's pretty
+  # print output so it's more readable and compact.
+  # See: <https://stackoverflow.com/a/46819029>
   jq \
     --indent 1 \
     --arg src "${src}" \
     -L "${./jq}" \
     'import "lib" as lib; . | lib::genCargoMetadata' \
     "$out/Cargo.metadata.raw.json" \
+    | awk '
+      function ltrim(x) { sub(/^ */, "", x); return x; }
+      s && NF > 1 && $NF == "["  { s=s $0;               next}
+      s && NF == 1 && $1 == "]," { print s "],";   s=""; next}
+      s && NF == 1 && $1 == "["  { print s;        s=$0; next}
+      s && NF == 1 && $1 == "{"  { print s; print; s=""; next}
+      s && NF == 1 && $1 == "]"  { print s $1;     s=""; next}
+      s && NF == 1 && $1 == "}"  { print s;        s=$0; next}
+      s                          { s=s ltrim($0);        next}
+      $NF == "["                 { s=$0;                 next}
+      {print}
+    ' \
     > $out/Cargo.metadata.json
 
   set +x
