@@ -59,7 +59,7 @@ def cleanPkgManifestTargets($isWorkspacePkg; $manifestDir):
     # Unfortunately, the `cargo metadata` output for package targets is
     # non-deterministic (read: filesystem dependent), so we need to sort them
     # first.
-    | sort_by(.kind, .name)
+    | sort_by(.kind, .crate_types, .name)
     ;
 
 def cleanPkgSource:
@@ -74,17 +74,19 @@ def cleanPkgPath:
     ;
 
 # Clean a single dependency entry in a package manifest.
-def cleanPkgManifestDep:
+def cleanPkgManifestDep($isWorkspacePkg):
     .
     | .source = (.source | cleanPkgSource)
     | .path = (.path | cleanPkgPath)
+    # Remove dev-dependencies from non-workspace package manifests
+    | select($isWorkspacePkg or (.kind != "dev"))
     | filterNonNull
     ;
 
 # Clean all dependency entries in a package manifest.
-def cleanPkgManifestDeps:
+def cleanPkgManifestDeps($isWorkspacePkg):
     .
-    | map(cleanPkgManifestDep)
+    | map(cleanPkgManifestDep($isWorkspacePkg))
     ;
 
 # Clean a single package manifest.
@@ -104,7 +106,7 @@ def cleanPkgManifest:
         rust_version: .rust_version,
         edition: .edition,
         features: .features,
-        dependencies: .dependencies | cleanPkgManifestDeps,
+        dependencies: .dependencies | cleanPkgManifestDeps($isWorkspacePkg),
         targets: .targets | cleanPkgManifestTargets($isWorkspacePkg; $manifestDir),
       }
     | filterNonNull
