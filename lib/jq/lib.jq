@@ -2,6 +2,10 @@
 #
 #   $src : workspace source directory
 
+#
+# Utilities
+#
+
 # From an object, filter out all entries where the value is `null`
 def filterNonNull: with_entries(select(.value != null));
 
@@ -11,6 +15,19 @@ def indexBy(f):
     | INDEX(f)
     | map_values(del(f))
     ;
+
+# Expect only one item in an array
+def expectOne:
+    if (.[0] == null or .[1] != null) then
+        error("expected only one item")
+    else
+        .[0]
+    end
+    ;
+
+#
+# Stage 1: Cleaning
+#
 
 def cleanCratesRegistry:
     .
@@ -63,14 +80,22 @@ def cleanPkgManifestTargets($isWorkspacePkg; $manifestDir):
     ;
 
 def cleanPkgSource:
-    .
-    | if . != null then cleanCratesRegistry
-      else null end
+    if . != null then cleanCratesRegistry
+    else null end
     ;
 
 def cleanPkgPath:
-    .
-    | if . != null then (ltrimstr($src) | ltrimstr("/")) else . end
+    if . != null then (ltrimstr($src) | ltrimstr("/")) else . end
+    ;
+
+# Get a relative path to the package in $src (if it's a workspace package),
+# given the absolute $manifestDir path.
+def cleanPkgManifestPath($isWorkspacePkg; $manifestDir):
+    if $isWorkspacePkg then
+      ($manifestDir | ltrimstr($src) | ltrimstr("/") | rtrimstr("/"))
+    else
+      null
+    end
     ;
 
 # Clean a single dependency entry in a package manifest.
@@ -87,6 +112,7 @@ def cleanPkgManifestDep($isWorkspacePkg):
 def cleanPkgManifestDeps($isWorkspacePkg):
     .
     | map(cleanPkgManifestDep($isWorkspacePkg))
+    | sort_by(.name, .kind, .target)
     ;
 
 # Clean a single package manifest.
@@ -101,6 +127,8 @@ def cleanPkgManifest:
         version: .version,
         id: .id | cleanPkgId,
         source: .source | cleanPkgSource,
+        # relative path to the package directory in $src
+        path: cleanPkgManifestPath($isWorkspacePkg; $manifestDir),
         links: .links,
         default_run: .default_run,
         rust_version: .rust_version,
@@ -137,7 +165,7 @@ def cleanPkgDep:
 def cleanPkgDeps:
     .
     | map(cleanPkgDep)
-    | indexBy(.id)
+    # | indexBy(.id)
     ;
 
 def cleanPkg:
@@ -156,10 +184,74 @@ def cleanPkgs:
     # | indexBy(.id)
     ;
 
-def cleanWorkspaceMembers:
+#
+# Stage 2: Enrich
+#
+
+def enrichPkgDepKind($filteredDeps):
     .
-    | map(cleanPkgId)
-    | sort
+    | .kind as $kind
+    | .target as $target
+    | ($filteredDeps | map(select(.kind == $kind and .target == $target)) | expectOne) as $filteredDep
+    | {
+        kind: $kind,
+        target: $target,
+        optional: $filteredDep.optional,
+        default: $filteredDep.uses_default_features,
+        features: $filteredDep.features,
+      }
+    | filterNonNull
+    ;
+
+def manifestDepsForPkg($depManifest):
+    .
+    | map(select(
+        .name == $depManifest.name
+        and .source == $depManifest.source
+        and .path == $depManifest.path
+        # TODO(phlip9): do we need to check if $depManifest.version is in
+        # .version's semver range?
+      ))
+    ;
+
+# input:
+# ```
+# {
+#   "name": "i18n_embed",
+#   "id": "crates-io#i18n-embed@0.14.1",
+#   "dep_kinds": [{}, {"kind": "build"}]
+# }
+# ```
+# output:
+# ```
+# {
+#   "name": "i18n_embed",
+#   "id": "crates-io#i18n-embed@0.14.1",
+#   "dep_kinds": [
+#     {"optional": false, "default": true, "features": ["fluent-system","desktop-requester"]},
+#     {"target": "cfg(target_env = "wasm")", "optional": false, "default": true, "features": ["gettext-system"]},
+#     {"kind": "build", "optional": false, "default": true, "features": ["fluent-system"]}
+#   ]
+# }
+# ```
+def enrichPkgDep($manifest; $manifests):
+    .
+    | $manifests[.id] as $depManifest
+    | ($manifest.dependencies | manifestDepsForPkg($depManifest)) as $filteredDeps
+    | {
+        # TODO(phlip9): need rename?
+        name: .name,
+        id: .id,
+        kinds: .dep_kinds | map(enrichPkgDepKind($filteredDeps)),
+        # # debugging
+        # filteredDeps: $filteredDeps,
+      }
+    ;
+
+def enrichPkgDeps($manifest; $manifests):
+    .
+    | map(enrichPkgDep($manifest; $manifests))
+    | indexBy(.id)
     ;
 
 def enrichPkg($manifests):
@@ -174,7 +266,7 @@ def enrichPkg($manifests):
         rust_version: $manifest.rust_version,
         edition: $manifest.edition,
         features: $manifest.features,
-        deps: .deps,
+        deps: .deps | enrichPkgDeps($manifest; $manifests),
         targets: $manifest.targets,
       }
     | filterNonNull
@@ -186,6 +278,16 @@ def enrichPkgs($manifests):
     | indexBy(.id)
     ;
 
+def cleanWorkspaceMembers:
+    .
+    | map(cleanPkgId)
+    | sort
+    ;
+
+#
+# main
+#
+
 # Generate `Cargo.metadata.json`
 def genCargoMetadata:
     .
@@ -195,7 +297,7 @@ def genCargoMetadata:
     | {
         workspace_members: .workspace_members | cleanWorkspaceMembers,
         workspace_default_members: .workspace_default_members | cleanWorkspaceMembers,
-        pkgs: (.resolve.nodes | cleanPkgs),
+        packages: (.resolve.nodes | cleanPkgs),
         manifests: (.packages | cleanPkgManifests),
       }
     # Next we're going to enrich each item in `pkgs` with relevant info from
@@ -205,8 +307,8 @@ def genCargoMetadata:
     | {
         workspace_members: .workspace_members,
         workspace_default_members: .workspace_default_members,
-        pkgs: .pkgs | enrichPkgs($manifests),
-        # hold on to this for now while debugging
-        manifests: .manifests,
+        packages: .packages | enrichPkgs($manifests),
+        # # hold on to this for now while debugging
+        # manifests: .manifests,
       }
     ;
