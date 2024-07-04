@@ -10,7 +10,7 @@
   outputs = {self, ...} @ inputs: let
     lib = inputs.nixpkgs.lib;
 
-    systems = ["x86_64-linux" "aarch64-linux"];
+    systems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin"];
     eachSystem = builder: lib.genAttrs systems builder;
 
     systemPkgs = eachSystem (system: inputs.nixpkgs.legacyPackages.${system});
