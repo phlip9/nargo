@@ -11,6 +11,7 @@ lib.makeScope pkgs.newScope (self: {
   # inject some external dependencies
   craneLib = craneLib;
 
-  # Generate Cargo.metadata.json
+  # Generate the `Cargo.metadata.json` file used to build packages from a cargo
+  # workspace.
   generateCargoMetadata = self.callPackage ./generateCargoMetadata.nix {};
 })

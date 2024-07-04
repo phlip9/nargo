@@ -7,6 +7,7 @@
 }:
 #
 {
+  name,
   # TODO(phlip9): filter `src` with `craneLib.mkDummySrc`
   src,
   cargoVendorDir,
@@ -14,7 +15,7 @@
 #
 let
   raw =
-    pkgsBuildBuild.runCommandLocal "cargo-metadata-raw" {
+    pkgsBuildBuild.runCommandLocal "${name}-cargo-metadata-raw" {
       depsBuildBuild = [cargo jq toml2json];
       env.cargoVendorDir = cargoVendorDir;
     } ''
@@ -56,7 +57,7 @@ let
     '';
 in
   # do this in a separate derivation while I'm debugging
-  pkgsBuildBuild.runCommandLocal "cargo-metadata" {
+  pkgsBuildBuild.runCommandLocal "${name}-cargo-metadata" {
     depsBuildBuild = [jq];
     env.cargoVendorDir = cargoVendorDir;
   } ''
