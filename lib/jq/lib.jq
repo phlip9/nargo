@@ -19,7 +19,7 @@ def indexBy(f):
 # Expect only one item in an array
 def expectOne:
     if (.[0] == null or .[1] != null) then
-        error("expected only one item")
+        error("expected only one item: got \(.)")
     else
         .[0]
     end
@@ -203,15 +203,64 @@ def enrichPkgDepKind($filteredDeps):
     | filterNonNull
     ;
 
+def unlockPkgManifestSource:
+    if . != null then
+      . | split("#") | first
+    else
+      .
+    end
+    ;
+
+# input: `$manifests[.id].dependencies`
+# ```
+# {
+#  "name": "semver",
+#  "source": "crates-io",
+#  "req": "^1",
+#  "rename": "cratesio",
+#  "optional": false,
+#  "uses_default_features": true,
+#  "features": []
+# }
+# {
+#  "name": "semver",
+#  "source": "git+http://github.com/dtolnay/semver?branch=master",
+#  "req": "*",
+#  "rename": "git-branch",
+#  "optional": false,
+#  "uses_default_features": true,
+#  "features": []
+# }
+# ```
+#
+# `$depManifest`: `$manifests[.depId]`
+# ```
+# {
+#  "name": "semver",
+#  "version": "1.0.12",
+#  "source": "git+http://github.com/dtolnay/semver?branch=master#a6425e6f41ddc81c6d6dd60c68248e0f0ef046c7",
+#  "rust_version": "1.31",
+#  ...
+# }
+# ```
 def manifestDepsForPkg($depManifest):
     .
+    # The `.source` in the top-level manifest is the _locked_ version. For a git
+    # dependency, this doesn't match the original dependency entry `.source`,
+    # which doesn't have its git rev pinned yet.
+    | ($depManifest.source | unlockPkgManifestSource) as $depManifestSource
     | map(select(
         .name == $depManifest.name
-        and .source == $depManifest.source
+        and .source == $depManifestSource
         and .path == $depManifest.path
         # TODO(phlip9): do we need to check if $depManifest.version is in
         # .version's semver range?
       ))
+    ;
+
+def inSemverRange($version; $versionReq):
+    .
+    | true
     ;
 
 # input:
@@ -239,7 +288,6 @@ def enrichPkgDep($manifest; $manifests):
     | $manifests[.id] as $depManifest
     | ($manifest.dependencies | manifestDepsForPkg($depManifest)) as $filteredDeps
     | {
-        # TODO(phlip9): need rename?
         name: .name,
         id: .id,
         kinds: .dep_kinds | map(enrichPkgDepKind($filteredDeps)),
