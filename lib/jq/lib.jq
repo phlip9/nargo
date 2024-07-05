@@ -192,7 +192,8 @@ def enrichPkgDepKind($filteredDeps):
     .
     | .kind as $kind
     | .target as $target
-    | ($filteredDeps | map(select(.kind == $kind and .target == $target)) | expectOne) as $filteredDep
+    # | ($filteredDeps | map(select(.kind == $kind and .target == $target)) | expectOne) as $filteredDep
+    | ($filteredDeps | map(select(.kind == $kind and .target == $target)) | first) as $filteredDep
     | {
         kind: $kind,
         target: $target,
@@ -201,6 +202,45 @@ def enrichPkgDepKind($filteredDeps):
         features: $filteredDep.features,
       }
     | filterNonNull
+    ;
+
+def semverCmpEq(
+    $cmpMajor; $cmpMinor; $cmpPatch; $cmpPre;
+    $major; $minor; $patch; $pre
+):
+    .
+    ;
+
+def maybeParseInt:
+    if . == null then null else . | tonumber end;
+
+def semverComparatorContains($version):
+    .
+    | if . == "*" then true
+      else
+        .
+        | .[:1] as $op
+        | (.[1:] | split(".")) as [$cmpMajor, $cmpMinor, $cmpPatchWithPre]
+        | ($patchWithPre | split("-")) as [$cmpPatch, $cmpPre]
+
+        | ($version | split(".") | map(tonumber)) as [$major, $minor, $patchWithPre]
+        | ($patchWithPre | split("-")) as [$patch, $pre]
+
+        | if $op == "=" then
+            ($major == $cmpMajor)
+          elif $op == "^" then
+            false
+          else halt_error("unrecognized semver operator: \(.)") end
+      end
+    ;
+
+def inSemverRange($version; $versionReq):
+    $versionReq
+    # Split out each version comparator
+    | [splits(", ")]
+    # Check that we're in range for all individual comparators
+    | map(semverComparatorContains($version))
+    | all
     ;
 
 def unlockPkgManifestSource:
@@ -253,14 +293,8 @@ def manifestDepsForPkg($depManifest):
         .name == $depManifest.name
         and .source == $depManifestSource
         and .path == $depManifest.path
-        # TODO(phlip9): do we need to check if $depManifest.version is in
-        # .version's semver range?
+        # and inSemverRange($depManifest.version; 
       ))
-    ;
-
-def inSemverRange($version; $versionReq):
-    .
-    | true
     ;
 
 # input:
