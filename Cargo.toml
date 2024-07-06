@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "crates/nargo-metadata",
+]
+
+[profile.release]
+panic = "abort"
+
+[profile.dev]
+panic = "abort"
