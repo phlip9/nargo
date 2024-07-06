@@ -2,9 +2,10 @@
 
 #![allow(dead_code)]
 
-use std::collections::BTreeMap;
+use std::{cmp, collections::BTreeMap, fmt};
 
-use serde::Deserialize;
+use anyhow::Context;
+use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 
 #[derive(Deserialize)]
@@ -31,7 +32,8 @@ pub struct Manifest<'a> {
     #[serde(borrow)]
     pub id: PkgId<'a>,
 
-    pub source: Option<&'a str>,
+    #[serde(borrow)]
+    pub source: Option<Source<'a>>,
 
     #[serde(borrow)]
     pub dependencies: Vec<ManifestDependency<'a>>,
@@ -57,7 +59,8 @@ pub struct Manifest<'a> {
 pub struct ManifestDependency<'a> {
     pub name: &'a str,
 
-    pub source: Option<&'a str>,
+    #[serde(borrow)]
+    pub source: Option<Source<'a>>,
 
     pub req: semver::VersionReq,
 
@@ -134,17 +137,43 @@ pub struct NodeDepKind<'a> {
     pub target: Option<Platform<'a>>,
 }
 
+#[derive(Eq, PartialEq, Ord, PartialOrd)]
 pub enum DepKind {
     Normal,
     Dev,
     Build,
 }
 
-#[derive(Deserialize)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
 pub struct PkgId<'a>(pub &'a str);
+
+#[derive(Eq, PartialEq, Deserialize)]
+pub struct Source<'a>(pub &'a str);
 
 #[derive(Deserialize)]
 pub struct Platform<'a>(#[serde(borrow)] pub &'a RawValue);
+
+//
+// --- impl Manifest ---
+//
+
+impl<'a> Manifest<'a> {
+    pub fn is_workspace_pkg(&self) -> bool {
+        self.source.is_none()
+    }
+
+    /// The directory path that contains the `Cargo.toml` manifest.
+    pub fn manifest_dir(&self) -> &'a str {
+        self.manifest_path
+            .strip_suffix("Cargo.toml")
+            .with_context(|| {
+                let id = self.id;
+                let mp = self.manifest_path;
+                format!("Failed to get dir from this manifest_path: '{mp}'. Manifest: '{id}'")
+            })
+            .unwrap()
+    }
+}
 
 //
 // --- impl DepKind ---
@@ -162,5 +191,39 @@ impl<'de> serde::Deserialize<'de> for DepKind {
             Some(var) =>
                 Err(serde::de::Error::unknown_variant(var, &["dev", "build"])),
         }
+    }
+}
+
+//
+// --- impl PkgId ---
+//
+
+impl<'a> fmt::Display for PkgId<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
+//
+// --- impl Platform ---
+//
+
+impl<'a> cmp::Eq for Platform<'a> {}
+
+impl<'a> cmp::PartialEq for Platform<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.get() == other.0.get()
+    }
+}
+
+impl<'a> cmp::Ord for Platform<'a> {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.0.get().cmp(other.0.get())
+    }
+}
+
+impl<'a> cmp::PartialOrd for Platform<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
