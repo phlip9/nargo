@@ -216,7 +216,7 @@ impl<'a> input::PkgId<'a> {
 impl<'a> input::Source<'a> {
     fn clean(&mut self) {
         if self.0 == CRATES_IO_REGISTRY {
-            self.0 = "crates.io-index"
+            self.0 = "crates.io"
         }
     }
 }

@@ -147,10 +147,10 @@ pub enum DepKind {
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
 pub struct PkgId<'a>(pub &'a str);
 
-#[derive(Eq, PartialEq, Deserialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Source<'a>(pub &'a str);
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Platform<'a>(#[serde(borrow)] pub &'a RawValue);
 
 //
@@ -173,11 +173,67 @@ impl<'a> Manifest<'a> {
             })
             .unwrap()
     }
+
+    // Relative path to the package in workspace_src (if it's a workspace
+    // package).
+    pub fn relative_workspace_path(
+        &self,
+        workspace_src: &'a str,
+    ) -> Option<&'a str> {
+        if self.is_workspace_pkg() {
+            let path = self.manifest_dir()
+                .strip_prefix(workspace_src)
+                .with_context(|| format!(
+                    "Expected workspace package's `manifest_path` to be a subdirectory of `workspace_src`:\n\
+                                   id: '{}'\n\
+                        manifest_path: '{}'\n\
+                        workspace_src: '{workspace_src}'\n\
+                    ",
+                    self.id,
+                    self.manifest_path,
+                ))
+                .unwrap()
+                .trim_start_matches('/')
+                .trim_end_matches('/');
+            Some(path)
+        } else {
+            None
+        }
+    }
 }
 
 //
 // --- impl DepKind ---
 //
+
+impl DepKind {
+    pub fn is_normal(&self) -> bool {
+        *self == Self::Normal
+    }
+
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Dev => "dev",
+            Self::Build => "build",
+        }
+    }
+}
+
+impl fmt::Display for DepKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl serde::Serialize for DepKind {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.as_str().serialize(serializer)
+    }
+}
 
 impl<'de> serde::Deserialize<'de> for DepKind {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -201,6 +257,20 @@ impl<'de> serde::Deserialize<'de> for DepKind {
 impl<'a> fmt::Display for PkgId<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.0)
+    }
+}
+
+//
+// --- impl Source ---
+//
+
+impl<'a> Source<'a> {
+    pub fn strip_locked(&self) -> Self {
+        let s = self.0;
+        match s.split_once('#') {
+            Some((first, _rest)) => Self(first),
+            None => Self(s),
+        }
     }
 }
 
