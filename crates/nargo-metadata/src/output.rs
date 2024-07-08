@@ -37,14 +37,18 @@ pub struct Package<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub links: Option<&'a str>,
 
+    #[serde(serialize_with = "compact::deps")]
     pub deps: BTreeMap<PkgId<'a>, PkgDep<'a>>,
 
+    #[serde(serialize_with = "compact::targets")]
     pub targets: Vec<ManifestTarget<'a>>,
 }
 
 #[derive(Serialize)]
 pub struct PkgDep<'a> {
     pub name: &'a str,
+
+    #[serde(serialize_with = "compact::dep_kinds")]
     pub kinds: Vec<PkgDepKind<'a>>,
 }
 
@@ -82,6 +86,7 @@ pub struct ManifestTarget<'a> {
 
     pub path: &'a str,
 
+    // TODO(phlip9): is this ever different than the package edition?
     pub edition: &'a str,
 }
 
@@ -326,5 +331,61 @@ mod slice {
     #[inline]
     pub fn is_empty<T>(x: &[T]) -> bool {
         x.is_empty()
+    }
+}
+
+/// `#[serde(serialize_with = "...")]` helpers that make the output more
+/// compact.
+mod compact {
+    use std::collections::BTreeMap;
+
+    use serde::ser::{SerializeMap as _, Serializer};
+    use serde_json::value::RawValue;
+
+    use super::*;
+
+    pub fn deps<'a, S: Serializer>(
+        values: &BTreeMap<PkgId<'a>, PkgDep<'a>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let mut map_serializer =
+            serializer.serialize_map(Some(values.len()))?;
+
+        for (id, dep) in values {
+            let one_line_string = serde_json::to_string(dep).unwrap();
+            // If the compact output is short enough, serialize that
+            if dep.kinds.len() <= 1 || one_line_string.len() <= 140 {
+                map_serializer.serialize_entry(
+                    id,
+                    &RawValue::from_string(one_line_string).unwrap(),
+                )?;
+            } else {
+                map_serializer.serialize_entry(id, dep)?
+            }
+        }
+
+        map_serializer.end()
+    }
+
+    pub fn dep_kinds<'a, S: Serializer>(
+        values: &Vec<PkgDepKind<'a>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let raw_values = values.iter().map(|value| {
+            let compact_json = serde_json::to_string(value).unwrap();
+            RawValue::from_string(compact_json).unwrap()
+        });
+        serializer.collect_seq(raw_values)
+    }
+
+    pub fn targets<S: Serializer>(
+        values: &Vec<ManifestTarget>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let raw_values = values.iter().map(|value| {
+            let compact_json = serde_json::to_string(value).unwrap();
+            RawValue::from_string(compact_json).unwrap()
+        });
+        serializer.collect_seq(raw_values)
     }
 }
