@@ -22,7 +22,7 @@ FLAGS:
 OPTIONS:
   --src SRC             Cargo workspace directory path
   --metadata METADATA   Path to raw cargo-metadata json output. If left unset
-                        or set to "-", then we read from stdin.
+                        or set to "-", then this is read from stdin.
 "#;
 
 pub struct Args {
@@ -53,8 +53,6 @@ impl Args {
             read_file_or_stdin(self.metadata.as_deref())
                 .expect("Failed to read `cargo metadata`")
         );
-
-        // eprintln!("{}", std::str::from_utf8(&buf[..50]).unwrap());
 
         time!("run", crate::run::run(&self.src, buf.as_slice()));
     }

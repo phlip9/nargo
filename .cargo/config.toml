@@ -1,0 +1,4 @@
+# # compile std with `panic = "abort"` to reduce binary size
+# [unstable]
+# build-std = ["std", "panic_abort"]
+# build-std-features = [] # <- turns off backtrace+unwind features
