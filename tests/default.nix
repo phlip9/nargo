@@ -12,12 +12,4 @@ in rec {
     name = "gen-metadata-all";
     paths = catAttrs "metadata" (attrValues examples);
   };
-
-  jq-tests =
-    pkgs.runCommandLocal "jq-tests" {
-      nativeBuildInputs = [pkgs.jq];
-    } ''
-      mkdir $out
-      jq -n -L "${../lib/jq}" -f "${./jq/tests.jq}" > $out/tests.json
-    '';
 }
