@@ -14,4 +14,7 @@ lib.makeScope pkgs.newScope (self: {
   # Generate the `Cargo.metadata.json` file used to build packages from a cargo
   # workspace.
   generateCargoMetadata = self.callPackage ./generateCargoMetadata.nix {};
+
+  # The Rust binary used to generate the `Cargo.metadata.json` file.
+  nargoMetadata = self.callPackage ./nargoMetadata.nix {};
 })

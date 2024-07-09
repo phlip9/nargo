@@ -31,6 +31,8 @@
     };
 
     packages = eachSystem (system: {
+      nargo-metadata = systemNargoLib.${system}.nargoMetadata;
+
       tests = import ./tests {
         craneLib = systemCraneLib.${system};
         nargoLib = systemNargoLib.${system};
