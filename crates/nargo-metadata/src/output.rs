@@ -337,6 +337,8 @@ mod slice {
 /// `#[serde(serialize_with = "...")]` helpers that make the output more
 /// compact.
 mod compact {
+    #![allow(clippy::ptr_arg)]
+
     use std::collections::BTreeMap;
 
     use serde::ser::{SerializeMap as _, Serializer};
@@ -367,8 +369,8 @@ mod compact {
         map_serializer.end()
     }
 
-    pub fn dep_kinds<'a, S: Serializer>(
-        values: &Vec<PkgDepKind<'a>>,
+    pub fn dep_kinds<S: Serializer>(
+        values: &Vec<PkgDepKind<'_>>,
         serializer: S,
     ) -> Result<S::Ok, S::Error> {
         let raw_values = values.iter().map(|value| {
