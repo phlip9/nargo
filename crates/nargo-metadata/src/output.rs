@@ -37,6 +37,9 @@ pub struct Package<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub links: Option<&'a str>,
 
+    #[serde(serialize_with = "compact::features")]
+    pub features: &'a BTreeMap<&'a str, Vec<&'a str>>,
+
     #[serde(serialize_with = "compact::deps")]
     pub deps: BTreeMap<PkgId<'a>, PkgDep<'a>>,
 
@@ -163,6 +166,7 @@ impl<'a> Package<'a> {
             source: manifest.source,
             default_run: manifest.default_run,
             links: manifest.links,
+            features: &manifest.features,
             deps,
             targets,
         }
@@ -345,6 +349,17 @@ mod compact {
     use serde_json::value::RawValue;
 
     use super::*;
+
+    pub fn features<'a, S: Serializer>(
+        values: &BTreeMap<&'a str, Vec<&'a str>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let raw_values = values.iter().map(|(&k, v)| {
+            let compact_json = serde_json::to_string(v).unwrap();
+            (k, RawValue::from_string(compact_json).unwrap())
+        });
+        serializer.collect_map(raw_values)
+    }
 
     pub fn deps<'a, S: Serializer>(
         values: &BTreeMap<PkgId<'a>, PkgDep<'a>>,
