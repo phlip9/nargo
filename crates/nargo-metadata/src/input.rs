@@ -137,7 +137,7 @@ pub struct NodeDepKind<'a> {
     pub target: Option<Platform<'a>>,
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum DepKind {
     Normal,
     Dev,
@@ -147,10 +147,10 @@ pub enum DepKind {
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
 pub struct PkgId<'a>(pub &'a str);
 
-#[derive(Copy, Clone, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Source<'a>(pub &'a str);
 
-#[derive(Debug, Deserialize)]
+#[derive(Copy, Clone, Debug, Deserialize)]
 pub struct Platform<'a>(#[serde(borrow)] pub &'a RawValue);
 
 //

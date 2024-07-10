@@ -187,10 +187,12 @@ impl<'a> PkgDep<'a> {
     ) -> Self {
         let dep_id = dep.pkg;
         let dep_manifest = &manifests[&dep_id];
+        let dep_manifest_name = dep_manifest.name;
         let dep_manifest_source_stripped =
             dep_manifest.source.as_ref().map(Source::strip_locked);
         let dep_manifest_path =
             dep_manifest.relative_workspace_path(ctx.workspace_src);
+        let dep_manifest_version = &dep_manifest.version;
 
         let manifest = &manifests[&id];
 
@@ -204,20 +206,37 @@ impl<'a> PkgDep<'a> {
         // (kind, target)-dep entry below.
         let deps_for_pkg_dep =
             manifest.dependencies.iter().filter(|&manifest_dep| {
-                manifest_dep.name == dep_manifest.name
+                manifest_dep.name == dep_manifest_name
                     && manifest_dep.source == dep_manifest_source_stripped
-                    && manifest_dep.path == dep_manifest_path
-                    && manifest_dep.req.matches(&dep_manifest.version)
+                    // Path dependencies only match by path.
+                    // Other dependencies match by version.
+                    && (if manifest_dep.path.is_some() {
+                        manifest_dep.path == dep_manifest_path
+                    } else {
+                        manifest_dep.req.matches(dep_manifest_version)
+                    })
             });
         deps_arena.clear();
         deps_arena.extend(deps_for_pkg_dep);
 
         assert!(
             !deps_arena.is_empty(),
-            "Didn't find _any_ relevant Cargo.toml dependency entries that match:\n\
-                    package id: '{id}'\n\
-                 dependency id: '{dep_id}'\n\
-            "
+            r#"
+Didn't find _any_ relevant Cargo.toml dependency entries that match:
+       package id: '{id}'
+    dependency id: '{dep_id}'
+
+dependency: {{
+  name: "{dep_manifest_name}",
+  source: {dep_manifest_source_stripped:?},
+  path: {dep_manifest_path:?},
+  version: "{dep_manifest_version}",
+}}
+
+'{id}'.dependencies:
+{}
+"#,
+            dump::manifest_deps(&manifest.dependencies),
         );
 
         let kinds = dep
@@ -404,5 +423,46 @@ mod compact {
             RawValue::from_string(compact_json).unwrap()
         });
         serializer.collect_seq(raw_values)
+    }
+}
+
+//
+// --- debug output utils ---
+//
+
+mod dump {
+    use serde::Serialize;
+
+    use crate::{input, output};
+
+    pub fn manifest_deps(
+        manifest_deps: &[input::ManifestDependency],
+    ) -> String {
+        // Only the info relevant for debugging dependency correlation
+        #[derive(Serialize)]
+        struct Dep<'a> {
+            name: &'a str,
+            source: Option<input::Source<'a>>,
+            req: &'a semver::VersionReq,
+            path: Option<&'a str>,
+            registry: Option<&'a str>,
+            kind: input::DepKind,
+            target: Option<output::Platform<'a>>,
+        }
+
+        let deps = manifest_deps
+            .iter()
+            .map(|dep| Dep {
+                name: dep.name,
+                source: dep.source,
+                req: &dep.req,
+                path: dep.path,
+                registry: dep.registry,
+                kind: dep.kind,
+                target: dep.target.map(output::Platform::from_input),
+            })
+            .collect::<Vec<_>>();
+
+        serde_json::to_string_pretty(&deps).unwrap()
     }
 }
