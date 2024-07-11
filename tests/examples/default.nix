@@ -25,6 +25,19 @@
       src = src;
       name = baseNameOf src;
     };
+
+  nocargoSrc = pkgs.fetchFromGitHub {
+    owner = "oxalica";
+    repo = "nocargo";
+    rev = "7fdb03e1be21411764271f2ec85187870f0a9428"; # 2024-01-08
+    hash = "sha256-ZgVnsJ/Pw51o2Zg+WS4pU4EC0zj526qxj/2IXxyDMiY=";
+  };
+
+  mkNocargoExample = crate:
+    mkExample {
+      name = crate;
+      src = nocargoSrc + "/tests/${crate}";
+    };
 in {
   #
   # Internal example crates
@@ -72,4 +85,24 @@ in {
         cp $src_raw/Cargo.lock.msrv $out/Cargo.lock
       '';
   };
+
+  #
+  # nocargo tests
+  #
+
+  build-deps = mkNocargoExample "build-deps";
+  build-feature-env-vars = mkNocargoExample "build-feature-env-vars";
+  cap-lints = mkNocargoExample "cap-lints";
+  crate-names = mkNocargoExample "crate-names";
+  custom-lib-name = mkNocargoExample "custom-lib-name";
+  features = mkNocargoExample "features";
+  libz-dynamic = mkNocargoExample "libz-dynamic";
+  libz-static = mkNocargoExample "libz-static";
+  lto-fat = mkNocargoExample "lto-fat";
+  lto-proc-macro = mkNocargoExample "lto-proc-macro";
+  lto-thin = mkNocargoExample "lto-thin";
+  tokio-app = mkNocargoExample "tokio-app";
+  workspace-inline = mkNocargoExample "workspace-inline";
+  workspace-proc-macro-lto = mkNocargoExample "workspace-proc-macro-lto";
+  workspace-virtual = mkNocargoExample "workspace-virtual";
 }

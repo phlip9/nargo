@@ -21,9 +21,9 @@ let
       env.cargoVendorDir = cargoVendorDir;
     } ''
       export CARGO_TARGET_DIR="$PWD/target"
-      export CARGO_HOME=$PWD/.cargo-home
-      mkdir -p $CARGO_HOME
-      cp $cargoVendorDir/config.toml $CARGO_HOME/config.toml
+      export CARGO_HOME="$PWD/.cargo-home"
+      mkdir -p "$CARGO_HOME"
+      cp "$cargoVendorDir/config.toml" "$CARGO_HOME/config.toml"
 
       mkdir $out
 
@@ -33,19 +33,23 @@ let
       # Ingest Cargo.lock file
       local cargoLockJson
       cargoLockJson="$out/Cargo.lock.json"
-      toml2json --pretty ${src}/Cargo.lock > $cargoLockJson
+      toml2json --pretty "${src}/Cargo.lock" > $cargoLockJson
       # cargoLockJson=$(mktemp)
       # trap "rm $cargoLockJson" 0
 
       # Ingest vendored registry+gitdep info from 'vendorCargoDeps'
       local cargoVendorJson
       cargoVendorJson="$out/Cargo.vendor.json"
-      toml2json --pretty $cargoVendorDir/config.toml > $cargoVendorJson
+      toml2json --pretty "$cargoVendorDir/config.toml" > $cargoVendorJson
       # cargoVendorJson=$(mktemp)
       # trap "rm $cargoVendorJson" 0
 
       # cp $cargoLockJson $out/Cargo.lock.json
       # cp $cargoVendorJson $out/Cargo.vendor.json
+
+      set -x
+
+      printenv cargoVendorDir
 
       cargo metadata \
         --manifest-path="${src}/Cargo.toml" \
@@ -55,6 +59,8 @@ let
         --all-features \
         | jq . \
         > $out/Cargo.metadata.raw.json
+
+      set +x
     '';
 in
   # do this in a separate derivation while I'm debugging
