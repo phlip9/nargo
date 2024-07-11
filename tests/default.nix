@@ -4,15 +4,14 @@
   nargoLib,
   pkgs,
 }: let
-  inherit (builtins) attrNames map;
+  inherit (pkgs.lib) mapAttrs';
 in rec {
   examples = import ./examples {inherit craneLib inputs nargoLib pkgs;};
 
-  # Ensure all examples can run `generateCargoMetadata` successfully.
-  genMetadataAllExamples = pkgs.linkFarm "gen-metadata-all" (
-    map (name: {
-      name = name;
-      path = examples.${name}.metadata;
-    }) (attrNames examples)
-  );
+  checks =
+    mapAttrs' (name: value: {
+      name = "${name}-metadata";
+      value = value.metadata;
+    })
+    examples;
 }

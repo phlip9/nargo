@@ -32,13 +32,16 @@
 
     packages = eachSystem (system: {
       nargo-metadata = systemNargoLib.${system}.nargo-metadata;
+    });
 
-      tests = import ./tests {
+    tests = eachSystem (system:
+      import ./tests {
         craneLib = systemCraneLib.${system};
         inputs = inputs;
         nargoLib = systemNargoLib.${system};
         pkgs = systemPkgs.${system};
-      };
-    });
+      });
+
+    checks = eachSystem (system: self.tests.${system}.checks);
   };
 }
