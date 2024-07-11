@@ -207,7 +207,8 @@ impl<'a> PkgDep<'a> {
         let deps_for_pkg_dep =
             manifest.dependencies.iter().filter(|&manifest_dep| {
                 manifest_dep.name == dep_manifest_name
-                    && manifest_dep.source == dep_manifest_source_stripped
+                    && manifest_dep.source.as_ref().map(input::Source::strip_locked)
+                        == dep_manifest_source_stripped
                     // Path dependencies only match by path.
                     // Other dependencies match by version.
                     && (if manifest_dep.path.is_some() {
