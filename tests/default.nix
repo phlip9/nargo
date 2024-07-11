@@ -1,11 +1,12 @@
 {
   craneLib,
+  inputs,
   nargoLib,
   pkgs,
 }: let
   inherit (builtins) attrNames map;
 in rec {
-  examples = import ./examples {inherit craneLib nargoLib pkgs;};
+  examples = import ./examples {inherit craneLib inputs nargoLib pkgs;};
 
   # Ensure all examples can run `generateCargoMetadata` successfully.
   genMetadataAllExamples = pkgs.linkFarm "gen-metadata-all" (

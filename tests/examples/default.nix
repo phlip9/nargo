@@ -1,5 +1,6 @@
 {
   craneLib,
+  inputs,
   nargoLib,
   pkgs,
 }: let
@@ -37,6 +38,12 @@
     mkExample {
       name = crate;
       src = nocargoSrc + "/tests/${crate}";
+    };
+
+  mkCraneExample = path:
+    mkExample {
+      name = baseNameOf path;
+      src = inputs.crane + "/${path}";
     };
 in {
   #
@@ -87,22 +94,66 @@ in {
   };
 
   #
+  # crane tests/pkgs
+  #
+
+  crane-utils = mkCraneExample "pkgs/crane-utils";
+
+  # crane-bindeps = mkCraneExample "checks/bindeps";
+  crane-bzip2-sys = mkCraneExample "checks/bzip2-sys";
+  crane-clippytest = mkCraneExample "checks/clippy/clippytest";
+  crane-codesign = mkCraneExample "checks/codesign";
+  crane-features = mkCraneExample "checks/features/features";
+  crane-custom-dummy = mkCraneExample "checks/custom-dummy";
+  crane-dependencyBuildScriptPerms = mkCraneExample "checks/dependencyBuildScriptPerms";
+  crane-git-overlapping = mkCraneExample "checks/git-overlapping";
+  crane-git-repo-with-many-crates = mkCraneExample "checks/git-repo-with-many-crates";
+  crane-gitRevNoRef = mkCraneExample "checks/gitRevNoRef";
+  crane-grpcio-test = mkCraneExample "checks/grpcio-test";
+  crane-highs-sys-test = mkCraneExample "checks/highs-sys-test";
+  crane-illegal-bin = mkCraneExample "checks/illegal-bin";
+  crane-manually-vendored = mkCraneExample "checks/manually-vendored";
+  crane-no_std = mkCraneExample "checks/no_std";
+  crane-overlapping-targets = mkCraneExample "checks/overlapping-targets";
+  crane-proc-macro = mkCraneExample "checks/proc-macro";
+  crane-simple = mkCraneExample "checks/simple";
+  crane-simple-git = mkCraneExample "checks/simple-git";
+  crane-simple-git-workspace-inheritance = mkCraneExample "checks/simple-git-workspace-inheritance";
+  crane-simple-no-deps = mkCraneExample "checks/simple-no-deps";
+  crane-simple-only-tests = mkCraneExample "checks/simple-only-tests";
+  crane-simple-with-audit-toml = mkCraneExample "checks/simple-with-audit-toml";
+  crane-simple-with-deny-toml = mkCraneExample "checks/simple-with-deny-toml";
+  crane-trunk = mkCraneExample "checks/trunk";
+  crane-trunk-outdated-bindgen = mkCraneExample "checks/trunk-outdated-bindgen";
+  crane-various-targets = mkCraneExample "checks/various-targets";
+  crane-with-build-script = mkCraneExample "checks/with-build-script";
+  crane-with-build-script-custom = mkCraneExample "checks/with-build-script-custom";
+  crane-with-libs = mkCraneExample "checks/with-libs";
+  crane-with-libs-some-dep = mkCraneExample "checks/with-libs/some-dep";
+  crane-workspace = mkCraneExample "checks/workspace";
+  crane-workspace-git = mkCraneExample "checks/workspace-git";
+  crane-workspace-hack = mkCraneExample "checks/workspace-hack";
+  crane-workspace-inheritance = mkCraneExample "checks/workspace-inheritance";
+  crane-workspace-not-at-root = mkCraneExample "checks/workspace-not-at-root/workspace";
+  crane-workspace-root = mkCraneExample "checks/workspace-root";
+
+  #
   # nocargo tests
   #
 
-  build-deps = mkNocargoExample "build-deps";
-  build-feature-env-vars = mkNocargoExample "build-feature-env-vars";
-  cap-lints = mkNocargoExample "cap-lints";
-  crate-names = mkNocargoExample "crate-names";
-  custom-lib-name = mkNocargoExample "custom-lib-name";
-  features = mkNocargoExample "features";
-  libz-dynamic = mkNocargoExample "libz-dynamic";
-  libz-static = mkNocargoExample "libz-static";
-  lto-fat = mkNocargoExample "lto-fat";
-  lto-proc-macro = mkNocargoExample "lto-proc-macro";
-  lto-thin = mkNocargoExample "lto-thin";
-  tokio-app = mkNocargoExample "tokio-app";
-  workspace-inline = mkNocargoExample "workspace-inline";
-  workspace-proc-macro-lto = mkNocargoExample "workspace-proc-macro-lto";
-  workspace-virtual = mkNocargoExample "workspace-virtual";
+  nargo-build-deps = mkNocargoExample "build-deps";
+  nargo-build-feature-env-vars = mkNocargoExample "build-feature-env-vars";
+  nargo-cap-lints = mkNocargoExample "cap-lints";
+  nargo-crate-names = mkNocargoExample "crate-names";
+  nargo-custom-lib-name = mkNocargoExample "custom-lib-name";
+  nargo-features = mkNocargoExample "features";
+  nargo-libz-dynamic = mkNocargoExample "libz-dynamic";
+  nargo-libz-static = mkNocargoExample "libz-static";
+  nargo-lto-fat = mkNocargoExample "lto-fat";
+  nargo-lto-proc-macro = mkNocargoExample "lto-proc-macro";
+  nargo-lto-thin = mkNocargoExample "lto-thin";
+  nargo-tokio-app = mkNocargoExample "tokio-app";
+  nargo-workspace-inline = mkNocargoExample "workspace-inline";
+  nargo-workspace-proc-macro-lto = mkNocargoExample "workspace-proc-macro-lto";
+  nargo-workspace-virtual = mkNocargoExample "workspace-virtual";
 }

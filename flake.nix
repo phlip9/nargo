@@ -35,6 +35,7 @@
 
       tests = import ./tests {
         craneLib = systemCraneLib.${system};
+        inputs = inputs;
         nargoLib = systemNargoLib.${system};
         pkgs = systemPkgs.${system};
       };
