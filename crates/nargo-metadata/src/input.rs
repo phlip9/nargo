@@ -21,6 +21,8 @@ pub struct Metadata<'a> {
 
     #[serde(borrow)]
     pub resolve: Resolve<'a>,
+
+    pub workspace_root: &'a str,
 }
 
 #[derive(Deserialize)]

@@ -6,7 +6,7 @@ const CRATES_IO_REGISTRY: &str = "registry+https://github.com/rust-lang/crates.i
 
 #[derive(Copy, Clone)]
 pub struct Context<'a> {
-    pub workspace_src: &'a str,
+    pub workspace_root: &'a str,
 }
 
 //
@@ -97,7 +97,7 @@ impl<'a> input::ManifestDependency<'a> {
         self.source.as_mut().map(input::Source::clean);
 
         if let Some(path) = self.path.as_mut() {
-            *path = path.strip_prefix(ctx.workspace_src)
+            *path = path.strip_prefix(ctx.workspace_root)
                 .with_context(|| format!(
                     "A workspace Cargo.toml's path dependency points outside the workspace:\n\
                              dep.name: '{}'\n\
@@ -106,7 +106,7 @@ impl<'a> input::ManifestDependency<'a> {
                         workspace_src: '{}'\n\
                     ",
                     self.name,
-                    ctx.workspace_src,
+                    ctx.workspace_root,
                 ))
                 .unwrap()
                 .trim_start_matches('/');
@@ -193,7 +193,7 @@ impl<'a> input::PkgId<'a> {
         // ex: "path+file:///nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source#dependencies@0.0.0"
         // -> "dependencies@0.0.0"
         if let Some(rest) = id.strip_prefix("path+file://") {
-            let rest = rest.strip_prefix(ctx.workspace_src)?;
+            let rest = rest.strip_prefix(ctx.workspace_root)?;
             let rest = rest.trim_start_matches(['#', '/']);
             return Some(rest);
         }
@@ -228,14 +228,14 @@ mod test {
     #[test]
     fn test_pkg_id_clean() {
         let ctx = Context {
-            workspace_src: "/nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source",
+            workspace_root: "/nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source",
         };
         let id = "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/age#0.10.0";
         let id_clean = PkgId::clean_inner(id, ctx);
         assert_eq!(id_clean, Some("age#0.10.0"));
 
         let ctx = Context {
-            workspace_src: "/nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source",
+            workspace_root: "/nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source",
         };
         let id = "path+file:///nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source#dependencies@0.0.0";
         let id_clean = PkgId::clean_inner(id, ctx);

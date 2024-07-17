@@ -68,7 +68,6 @@ in
     depsBuildBuild = [nargo-metadata];
     env = {
       raw = raw;
-      workspaceSrc = "${src}";
     };
   } ''
     mkdir $out
@@ -81,10 +80,7 @@ in
     set -x
 
     # Generate the `Cargo.metadata.json` file.
-    nargo-metadata \
-      --src "$workspaceSrc" \
-      --metadata "$raw/Cargo.metadata.raw.json" \
-      > $out/Cargo.metadata.json
+    nargo-metadata --metadata "$raw/Cargo.metadata.raw.json" > $out/Cargo.metadata.json
 
     set +x
   ''

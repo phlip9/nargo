@@ -14,19 +14,17 @@ const HELP: &str = r#"
 nargo-metadata
 
 USAGE:
-  nargo-metadata [OPTIONS] --src SRC
+  nargo-metadata [--metadata METADATA]
 
 FLAGS:
   -h, --help            Prints help information
 
 OPTIONS:
-  --src SRC             Cargo workspace directory path
   --metadata METADATA   Path to raw cargo-metadata json output. If left unset
                         or set to "-", then this is read from stdin.
 "#;
 
 pub struct Args {
-    src: String,
     metadata: Option<PathBuf>,
 }
 
@@ -40,7 +38,6 @@ impl Args {
         }
 
         let args = Args {
-            src: pargs.value_from_fn("--src", parse_str)?,
             metadata: pargs.opt_value_from_os_str("--metadata", parse_path)?,
         };
 
@@ -54,12 +51,8 @@ impl Args {
                 .expect("Failed to read `cargo metadata`")
         );
 
-        time!("run", crate::run::run(&self.src, buf.as_slice()));
+        time!("run", crate::run::run(buf.as_slice()));
     }
-}
-
-fn parse_str(s: &str) -> Result<String, pico_args::Error> {
-    Ok(s.to_owned())
 }
 
 fn parse_path(os_str: &OsStr) -> Result<PathBuf, pico_args::Error> {

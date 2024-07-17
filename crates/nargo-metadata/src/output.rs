@@ -191,7 +191,7 @@ impl<'a> PkgDep<'a> {
         let dep_manifest_source_stripped =
             dep_manifest.source.as_ref().map(Source::strip_locked);
         let dep_manifest_path =
-            dep_manifest.relative_workspace_path(ctx.workspace_src);
+            dep_manifest.relative_workspace_path(ctx.workspace_root);
         let dep_manifest_version = &dep_manifest.version;
 
         let manifest = &manifests[&id];

@@ -9,7 +9,7 @@ use crate::{
     output,
 };
 
-pub fn run(workspace_src: &str, input_bytes: &[u8]) {
+pub fn run(input_bytes: &[u8]) {
     let mut input: input::Metadata<'_> = time!(
         "deserialize input",
         serde_json::from_slice(input_bytes)
@@ -18,7 +18,8 @@ pub fn run(workspace_src: &str, input_bytes: &[u8]) {
 
     let before_num_pkgs = input.resolve.nodes.len();
 
-    let ctx = clean::Context { workspace_src };
+    let workspace_root = input.workspace_root;
+    let ctx = clean::Context { workspace_root };
     time!("clean input", input.clean(ctx));
 
     let manifests: BTreeMap<PkgId<'_>, input::Manifest<'_>> = input
