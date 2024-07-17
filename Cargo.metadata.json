@@ -1,0 +1,255 @@
+{
+ "packages": {
+  "#anyhow@1.0.86": {
+   "name": "anyhow",
+   "version": "1.0.86",
+   "source": "crates.io",
+   "edition": "2018",
+   "rust_version": "1.39",
+   "features": {
+    "backtrace": ["dep:backtrace"],
+    "default": ["std"],
+    "std": []
+   },
+   "deps": {},
+   "targets": [
+    {"name":"build-script-build","kind":["custom-build"],"crate_types":["bin"],"path":"build.rs","edition":"2018"},
+    {"name":"anyhow","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
+   ]
+  },
+  "#itoa@1.0.11": {
+   "name": "itoa",
+   "version": "1.0.11",
+   "source": "crates.io",
+   "edition": "2018",
+   "rust_version": "1.36",
+   "features": {
+    "no-panic": ["dep:no-panic"]
+   },
+   "deps": {},
+   "targets": [
+    {"name":"itoa","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
+   ]
+  },
+  "#pico-args@0.5.0": {
+   "name": "pico-args",
+   "version": "0.5.0",
+   "source": "crates.io",
+   "edition": "2018",
+   "features": {
+    "combined-flags": [],
+    "default": [],
+    "eq-separator": [],
+    "short-space-opt": []
+   },
+   "deps": {},
+   "targets": [
+    {"name":"pico_args","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
+   ]
+  },
+  "#proc-macro2@1.0.86": {
+   "name": "proc-macro2",
+   "version": "1.0.86",
+   "source": "crates.io",
+   "edition": "2021",
+   "rust_version": "1.56",
+   "features": {
+    "default": ["proc-macro"],
+    "nightly": [],
+    "proc-macro": [],
+    "span-locations": []
+   },
+   "deps": {
+    "#unicode-ident@1.0.12": {"name":"unicode_ident","kinds":[{}]}
+   },
+   "targets": [
+    {"name":"build-script-build","kind":["custom-build"],"crate_types":["bin"],"path":"build.rs","edition":"2021"},
+    {"name":"proc_macro2","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
+   ]
+  },
+  "#quote@1.0.36": {
+   "name": "quote",
+   "version": "1.0.36",
+   "source": "crates.io",
+   "edition": "2018",
+   "rust_version": "1.56",
+   "features": {
+    "default": ["proc-macro"],
+    "proc-macro": ["proc-macro2/proc-macro"]
+   },
+   "deps": {
+    "#proc-macro2@1.0.86": {"name":"proc_macro2","kinds":[{"default":false}]}
+   },
+   "targets": [
+    {"name":"quote","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
+   ]
+  },
+  "#ryu@1.0.18": {
+   "name": "ryu",
+   "version": "1.0.18",
+   "source": "crates.io",
+   "edition": "2018",
+   "rust_version": "1.36",
+   "features": {
+    "no-panic": ["dep:no-panic"],
+    "small": []
+   },
+   "deps": {},
+   "targets": [
+    {"name":"ryu","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
+   ]
+  },
+  "#semver@1.0.23": {
+   "name": "semver",
+   "version": "1.0.23",
+   "source": "crates.io",
+   "edition": "2018",
+   "rust_version": "1.31",
+   "features": {
+    "default": ["std"],
+    "serde": ["dep:serde"],
+    "std": []
+   },
+   "deps": {
+    "#serde@1.0.203": {"name":"serde","kinds":[{"optional":true,"default":false}]}
+   },
+   "targets": [
+    {"name":"build-script-build","kind":["custom-build"],"crate_types":["bin"],"path":"build.rs","edition":"2018"},
+    {"name":"semver","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
+   ]
+  },
+  "#serde@1.0.203": {
+   "name": "serde",
+   "version": "1.0.203",
+   "source": "crates.io",
+   "edition": "2018",
+   "rust_version": "1.31",
+   "features": {
+    "alloc": [],
+    "default": ["std"],
+    "derive": ["serde_derive"],
+    "rc": [],
+    "serde_derive": ["dep:serde_derive"],
+    "std": [],
+    "unstable": []
+   },
+   "deps": {
+    "#serde_derive@1.0.203": {"name":"serde_derive","kinds":[{"optional":true},{"target":"cfg(any())"}]}
+   },
+   "targets": [
+    {"name":"build-script-build","kind":["custom-build"],"crate_types":["bin"],"path":"build.rs","edition":"2018"},
+    {"name":"serde","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
+   ]
+  },
+  "#serde_derive@1.0.203": {
+   "name": "serde_derive",
+   "version": "1.0.203",
+   "source": "crates.io",
+   "edition": "2015",
+   "rust_version": "1.56",
+   "features": {
+    "default": [],
+    "deserialize_in_place": []
+   },
+   "deps": {
+    "#proc-macro2@1.0.86": {"name":"proc_macro2","kinds":[{"default":false,"features":["proc-macro"]}]},
+    "#quote@1.0.36": {"name":"quote","kinds":[{"default":false,"features":["proc-macro"]}]},
+    "#syn@2.0.68": {"name":"syn","kinds":[{"default":false,"features":["clone-impls","derive","parsing","printing","proc-macro"]}]}
+   },
+   "targets": [
+    {"name":"serde_derive","kind":["proc-macro"],"crate_types":["proc-macro"],"path":"src/lib.rs","edition":"2015"}
+   ]
+  },
+  "#serde_json@1.0.120": {
+   "name": "serde_json",
+   "version": "1.0.120",
+   "source": "crates.io",
+   "edition": "2021",
+   "rust_version": "1.56",
+   "features": {
+    "alloc": ["serde/alloc"],
+    "arbitrary_precision": [],
+    "default": ["std"],
+    "float_roundtrip": [],
+    "indexmap": ["dep:indexmap"],
+    "preserve_order": ["indexmap","std"],
+    "raw_value": [],
+    "std": ["serde/std"],
+    "unbounded_depth": []
+   },
+   "deps": {
+    "#itoa@1.0.11": {"name":"itoa","kinds":[{}]},
+    "#ryu@1.0.18": {"name":"ryu","kinds":[{}]},
+    "#serde@1.0.203": {"name":"serde","kinds":[{"default":false}]}
+   },
+   "targets": [
+    {"name":"build-script-build","kind":["custom-build"],"crate_types":["bin"],"path":"build.rs","edition":"2021"},
+    {"name":"serde_json","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
+   ]
+  },
+  "#syn@2.0.68": {
+   "name": "syn",
+   "version": "2.0.68",
+   "source": "crates.io",
+   "edition": "2021",
+   "rust_version": "1.61",
+   "features": {
+    "clone-impls": [],
+    "default": ["derive","parsing","printing","clone-impls","proc-macro"],
+    "derive": [],
+    "extra-traits": [],
+    "fold": [],
+    "full": [],
+    "parsing": [],
+    "printing": ["dep:quote"],
+    "proc-macro": ["proc-macro2/proc-macro","quote?/proc-macro"],
+    "test": ["syn-test-suite/all-features"],
+    "visit": [],
+    "visit-mut": []
+   },
+   "deps": {
+    "#proc-macro2@1.0.86": {"name":"proc_macro2","kinds":[{"default":false}]},
+    "#quote@1.0.36": {"name":"quote","kinds":[{"optional":true,"default":false}]},
+    "#unicode-ident@1.0.12": {"name":"unicode_ident","kinds":[{}]}
+   },
+   "targets": [
+    {"name":"syn","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
+   ]
+  },
+  "#unicode-ident@1.0.12": {
+   "name": "unicode-ident",
+   "version": "1.0.12",
+   "source": "crates.io",
+   "edition": "2018",
+   "rust_version": "1.31",
+   "features": {},
+   "deps": {},
+   "targets": [
+    {"name":"unicode_ident","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
+   ]
+  },
+  "crates/nargo-metadata#0.1.0": {
+   "name": "nargo-metadata",
+   "version": "0.1.0",
+   "edition": "2021",
+   "features": {},
+   "deps": {
+    "#anyhow@1.0.86": {"name":"anyhow","kinds":[{}]},
+    "#pico-args@0.5.0": {"name":"pico_args","kinds":[{"features":["eq-separator"]}]},
+    "#semver@1.0.23": {"name":"semver","kinds":[{"features":["serde"]}]},
+    "#serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
+    "#serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]}
+   },
+   "targets": [
+    {"name":"nargo-metadata","kind":["bin"],"crate_types":["bin"],"path":"src/main.rs","edition":"2021"},
+    {"name":"nargo_metadata","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
+   ]
+  }
+ },
+ "workspace_members": [
+  "crates/nargo-metadata#0.1.0"
+ ],
+ "workspace_default_members": [
+  "crates/nargo-metadata#0.1.0"
+ ]
+}
