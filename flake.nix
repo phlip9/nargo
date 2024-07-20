@@ -43,5 +43,9 @@
       });
 
     checks = eachSystem (system: self.tests.${system}.checks);
+
+    _dbg = {
+      pkgs = systemPkgs;
+    };
   };
 }
