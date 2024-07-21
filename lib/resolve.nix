@@ -55,7 +55,7 @@ in rec {
     # TODO(phlip9): support multiple target platforms
     hostPlatform ? systems.elaborate hostTarget,
   }: let
-    # # Immutable context needed for feature resolution.
+    # Immutable context needed for feature resolution.
     ctx = {
       pkgs = metadata.packages;
       buildTarget = buildTarget;
@@ -84,34 +84,12 @@ in rec {
 
   # Activate a package with id `pkgId` for resovler target `featFor`.
   # This fn gets called _exactly once_ per `(pkgId, featFor)`.
-  _activatePkg = ctx: pkgId: featFor: let
-    # Skip optional deps here. We'll activate them if their associated feature
-    # is enabled in `_activateFv`.
-    nonOptional =
-      builtins.filter
-      (idFeatKind: !(builtins.elemAt idFeatKind 2).optional or false)
-      (_pkgDepsFiltered ctx pkgId featFor);
-  in
+  _activatePkg = ctx: pkgId: featFor:
     builtins.concatMap
-    (
-      idFeatKind: let
-        depPkgId = builtins.elemAt idFeatKind 0;
-        depFeatFor = builtins.elemAt idFeatKind 1;
-        depPkgDepKind = builtins.elemAt idFeatKind 2;
-        depFeatsWithDefault =
-          (depPkgDepKind.features or [])
-          ++ (
-            if depPkgDepKind.default or true
-            then ["default"]
-            else []
-          );
-      in
-        # the dep feature activations: `[<depPkgId> <depFeatFor> <depFeat>]`
-        (builtins.map (depFeat: {key = [depPkgId depFeatFor depFeat];}) depFeatsWithDefault)
-        # the dep pkg activation: `[<depPkgId> <depFeatFor>]`
-        ++ [{key = [depPkgId depFeatFor];}]
-    )
-    nonOptional;
+    _activateFilteredPkgDepFeatures
+    # Skip optional deps here. We'll activate them later in `_activateFv`, if
+    # their associated feature is enabled.
+    (_pkgDepsFiltered ctx pkgId featFor (_pkgDepName: pkgDepKind: !(pkgDepKind.optional or false)));
 
   # activate a feature (dispatch to each `FeatureValue` handler)
   _activateFv = ctx: pkgId: featFor: feat: let
@@ -125,7 +103,7 @@ in rec {
     then _activateFvDepFeature ctx pkgId featFor parsedFeat
     else throw "unknown feature type: ${feat}";
 
-  # activate a normal feature
+  # activate a normal feature (ex: "rt-multi-threaded")
   _activateFvNormal = ctx: pkgId: featFor: feat: let
     features = ctx.pkgs.${pkgId}.features;
 
@@ -137,10 +115,14 @@ in rec {
   in
     builtins.map (pkgFeat: {key = [pkgId featFor pkgFeat];}) activatedFeats;
 
-  # activate an optional dep feature
-  _activateFvDep = ctx: pkgId: featFor: depName: [];
+  # activate an optional dep feature (ex: "dep:serde_derive")
+  # TODO(phlip9): handle weak dep feature
+  _activateFvDep = ctx: pkgId: featFor: depName:
+    builtins.concatMap
+    _activateFilteredPkgDepFeatures
+    (_pkgDepsFiltered ctx pkgId featFor (pkgDepName: _pkgDepKind: pkgDepName == depName));
 
-  # Activate a transitive dep feature
+  # Activate a transitive dep feature (ex: "serde/std")
   _activateFvDepFeature = ctx: pkgId: featFor: parsedFeat: [];
 
   # Get the target-activated package dependencies for `pkgId` when it's
@@ -156,14 +138,17 @@ in rec {
   # (pkg, build)  + (dep, normal) -> (dep, build)
   # (pkg, build)  + (dep, build)  -> (dep, build)
   #
-  # :: (Ctx, PkgId, FeatFor) -> [ [ DepPkgId FeatFor PkgDepKind ] ]
-  _pkgDepsFiltered = ctx: pkgId: featFor: let
+  # :: (Ctx, PkgId, FeatFor, (depName: pkgDepKind: -> bool)) -> [ [ DepPkgId FeatFor PkgDepKind ] ]
+  _pkgDepsFiltered = ctx: pkgId: featFor: depFilter: let
     deps = ctx.pkgs.${pkgId}.deps;
     depPkgIds = builtins.attrNames deps;
   in
     builtins.concatMap
     (
       depPkgId: let
+        pkgDep = deps.${depPkgId};
+        pkgDepName = pkgDep.name;
+
         # Filter out any irrelevant dep entries (dev deps, inactive platform)
         # TODO(phlip9): support resolver v1
         # TODO(phlip9): support artifact deps
@@ -171,12 +156,14 @@ in rec {
           builtins.filter
           (
             pkgDepKind:
-            # # Ignore dev deps
+            # # Always ignore dev deps
               ((pkgDepKind.kind or null) != "dev")
+              # Check caller's filter
+              && (depFilter pkgDepName pkgDepKind)
               # Check target `cfg()` etc
               && (_isActivatedForPlatform ctx featFor pkgDepKind)
           )
-          deps.${depPkgId}.kinds;
+          pkgDep.kinds;
 
         depPkgContainsProcMacroTarget = _pkgContainsProcMacroTarget ctx.pkgs.${depPkgId};
       in
@@ -201,6 +188,24 @@ in rec {
         relevantPkgDepKinds
     )
     depPkgIds;
+
+  # Activate the features for each dep returned from `_pkgDepsFiltered`.
+  _activateFilteredPkgDepFeatures = idFeatKind: let
+    depPkgId = builtins.elemAt idFeatKind 0;
+    depFeatFor = builtins.elemAt idFeatKind 1;
+    depPkgDepKind = builtins.elemAt idFeatKind 2;
+    depFeatsWithDefault =
+      (depPkgDepKind.features or [])
+      ++ (
+        if depPkgDepKind.default or true
+        then ["default"]
+        else []
+      );
+  in
+    # the dep feature activations: `[<depPkgId> <depFeatFor> <depFeat>]`
+    (builtins.map (depFeat: {key = [depPkgId depFeatFor depFeat];}) depFeatsWithDefault)
+    # the dep pkg activation: `[<depPkgId> <depFeatFor>]`
+    ++ [{key = [depPkgId depFeatFor];}];
 
   # Is the dep activated for `featFor`, given the user's build platform and/or
   # target host platform (ex: --target=x86_64-unknown-linux-gnu).
