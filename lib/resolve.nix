@@ -116,21 +116,61 @@ in rec {
     builtins.map (pkgFeat: {key = [pkgId featFor pkgFeat];}) activatedFeats;
 
   # activate an optional dep feature (ex: "dep:serde_derive")
-  # TODO(phlip9): handle weak dep feature
+  # TODO(phlip9): somehow handle weak dep feature upon activation
   _activateFvDep = ctx: pkgId: featFor: depName:
     builtins.concatMap
     _activateFilteredPkgDepFeatures
     (_pkgDepsFiltered ctx pkgId featFor (pkgDepName: _pkgDepKind: pkgDepName == depName));
 
-  # Activate a transitive dep feature (ex: "serde/std")
-  _activateFvDepFeature = ctx: pkgId: featFor: parsedFeat: [];
+  # Activate a transitive dep feature (ex: "serde/std", "quote?/proc-macro")
+  # NOTE: Currently we ignore all weak dep features
+  # TODO(phlip9): produce weak dep feature correctly
+  _activateFvDepFeature = ctx: pkgId: featFor: parsedFeat:
+    if parsedFeat.weak
+    then []
+    else
+      builtins.concatMap
+      (
+        idFeatKind: let
+          depPkgId = builtins.elemAt idFeatKind 0;
+          depFeatFor = builtins.elemAt idFeatKind 1;
+          depPkgDepKind = builtins.elemAt idFeatKind 2;
+        in
+          # Activate the feature on the dependency itself
+          [{key = [depPkgId depFeatFor parsedFeat.depFeat];}]
+          ++ (
+            # If the dep is optional, either enable that dep (if not weak) or if
+            # weak, note it down to activate the feature if/when that dep is enabled
+            # later on.
+            # TODO(phlip9): actually handle weak
+            if depPkgDepKind.optional or false
+            then
+              (
+                # Activate the optional dep on self
+                [{key = [pkgId featFor "dep:${parsedFeat.depName}"];}]
+                ++ (
+                  # Old behavior before weak deps were added was to enable a
+                  # feature of the same name.
+                  #
+                  # Don't enable if the implicit optional dependency feature
+                  # wasn't created due to `dep:` hiding.
+                  if !parsedFeat.weak && ctx.${pkgId}.features ? parsedFeat.depName
+                  then [{key = [pkgId featFor parsedFeat.depName];}]
+                  else []
+                )
+              )
+            else []
+          )
+      )
+      (_pkgDepsFiltered ctx pkgId featFor
+        (pkgDepName: _pkgDepKind: pkgDepName == parsedFeat.depName));
 
   # Get the target-activated package dependencies for `pkgId` when it's
   # evaluated as a `featFor` dep (i.e., "build" vs "normal" dep).
   #
   # The `featFor` kind also propagates to each dep, so a (`pkgId`, "normal") dep
   # has a `kind == "build"` dep, we'll yield that dep as a "build" dep. OTOH, if
-  # we're evaluating `pkgId` as a "build" dep, all returned deps willl also be
+  # we're evaluating `pkgId` as a "build" dep, all returned deps will also be
   # "build" deps.
   #
   # (pkg, normal) + (dep, normal) -> (dep, normal)
@@ -260,7 +300,7 @@ in rec {
     (target: builtins.any (kind: kind == "proc-macro") target.kind)
     pkg.targets;
 
-  # Parse a raw feature string into a:
+  # Parse a raw feature string into a `FeatureValue`:
   #
   # ```rust
   # enum FeatureValue {
