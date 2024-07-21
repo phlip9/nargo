@@ -1,7 +1,10 @@
 #
 # Cargo feature resolution algorithm
 #
-{lib}: let
+{
+  lib,
+  targetCfg,
+}: let
   inherit (lib) systems;
   # inherit (builtins) elemAt head length fromJSON readFile;
 in rec {
@@ -57,8 +60,10 @@ in rec {
       pkgs = metadata.packages;
       buildTarget = buildTarget;
       buildPlatform = buildPlatform;
+      buildCfgs = targetCfg.platformToCfgs buildPlatform;
       hostTarget = hostTarget;
       hostPlatform = hostPlatform;
+      hostCfgs = targetCfg.platformToCfgs hostPlatform;
     };
 
     rootFeaturesWithDefault =
@@ -66,6 +71,7 @@ in rec {
       then rootFeatures
       else (rootFeatures ++ ["default"]);
   in
+    # Note: we can't use an attrset for the `key`, hence the list
     builtins.genericClosure {
       startSet = _mkStartSet ctx rootPkgIds rootFeaturesWithDefault;
 
@@ -86,12 +92,56 @@ in rec {
       (idFeatKind: !(builtins.elemAt idFeatKind 2).optional or false)
       (_pkgDepsFiltered ctx pkgId featFor);
   in
-    # Convert the filtered deps into the expected `genericClosure` format
-    builtins.map
-    (idFeatKind: {key = [(builtins.elemAt idFeatKind 0) (builtins.elemAt idFeatKind 1)];})
+    builtins.concatMap
+    (
+      idFeatKind: let
+        depPkgId = builtins.elemAt idFeatKind 0;
+        depFeatFor = builtins.elemAt idFeatKind 1;
+        depPkgDepKind = builtins.elemAt idFeatKind 2;
+        depFeatsWithDefault =
+          (depPkgDepKind.features or [])
+          ++ (
+            if depPkgDepKind.default or true
+            then ["default"]
+            else []
+          );
+      in
+        # the dep feature activations: `[<depPkgId> <depFeatFor> <depFeat>]`
+        (builtins.map (depFeat: {key = [depPkgId depFeatFor depFeat];}) depFeatsWithDefault)
+        # the dep pkg activation: `[<depPkgId> <depFeatFor>]`
+        ++ [{key = [depPkgId depFeatFor];}]
+    )
     nonOptional;
 
-  _activateFv = ctx: pkgId: featFor: feat: [];
+  # activate a feature (dispatch to each `FeatureValue` handler)
+  _activateFv = ctx: pkgId: featFor: feat: let
+    parsedFeat = _parseFeature feat;
+  in
+    if parsedFeat.type == "normal"
+    then _activateFvNormal ctx pkgId featFor parsedFeat.feat
+    else if parsedFeat.type == "dep"
+    then _activateFvDep ctx pkgId featFor parsedFeat.depName
+    else if parsedFeat.type == "depFeature"
+    then _activateFvDepFeature ctx pkgId featFor parsedFeat
+    else throw "unknown feature type: ${feat}";
+
+  # activate a normal feature
+  _activateFvNormal = ctx: pkgId: featFor: feat: let
+    features = ctx.pkgs.${pkgId}.features;
+
+    # Be lenient with `feat = "default"`, but strict with all others.
+    activatedFeats =
+      if feat == "default"
+      then features.default or []
+      else features.${feat};
+  in
+    builtins.map (pkgFeat: {key = [pkgId featFor pkgFeat];}) activatedFeats;
+
+  # activate an optional dep feature
+  _activateFvDep = ctx: pkgId: featFor: depName: [];
+
+  # Activate a transitive dep feature
+  _activateFvDepFeature = ctx: pkgId: featFor: parsedFeat: [];
 
   # Get the target-activated package dependencies for `pkgId` when it's
   # evaluated as a `featFor` dep (i.e., "build" vs "normal" dep).
@@ -114,10 +164,9 @@ in rec {
     builtins.concatMap
     (
       depPkgId: let
-        pkgDep = deps.${depPkgId};
-
         # Filter out any irrelevant dep entries (dev deps, inactive platform)
-        # TODO: support resolver v1
+        # TODO(phlip9): support resolver v1
+        # TODO(phlip9): support artifact deps
         relevantPkgDepKinds =
           builtins.filter
           (
@@ -127,7 +176,9 @@ in rec {
               # Check target `cfg()` etc
               && (_isActivatedForPlatform ctx featFor pkgDepKind)
           )
-          pkgDep.kinds;
+          deps.${depPkgId}.kinds;
+
+        depPkgContainsProcMacroTarget = _pkgContainsProcMacroTarget ctx.pkgs.${depPkgId};
       in
         # Update the featFor's
         builtins.map
@@ -140,7 +191,7 @@ in rec {
               if featFor == "normal"
               then
                 (
-                  if ((pkgDepKind.kind or null) == "build") || (_pkgContainsProcMacroTarget ctx.pkgs.${depPkgId})
+                  if ((pkgDepKind.kind or null) == "build") || depPkgContainsProcMacroTarget
                   then "build"
                   else featFor
                 )
@@ -153,9 +204,19 @@ in rec {
 
   # Is the dep activated for `featFor`, given the user's build platform and/or
   # target host platform (ex: --target=x86_64-unknown-linux-gnu).
-  #
-  # TODO
-  _isActivatedForPlatform = ctx: featFor: pkgDepKind: true;
+  # TODO(phlip9): support artifact deps
+  _isActivatedForPlatform = ctx: featFor: pkgDepKind:
+    if ! (pkgDepKind ? target)
+    # No `cfg(...)` or platform specifier => always activate
+    then true
+    else
+      # Evaluate the `cfg(...)` expr against the target platform for this pkgDep.
+      targetCfg.evalCfgExpr (
+        if featFor == "build" || (pkgDepKind.kind or null) == "build"
+        then ctx.buildCfgs
+        else ctx.hostCfgs
+      )
+      pkgDepKind.target;
 
   # Build the initial set of workspace packages and features to activate.
   _mkStartSet = ctx: rootPkgIds: rootFeatures: let
@@ -190,7 +251,37 @@ in rec {
     startSetWithFeatures ++ startSetWithoutFeatures;
 
   _pkgContainsProcMacroTarget = pkg:
-    builtins.any (target:
-      builtins.any (kind: kind == "proc-macro") target.kind)
+    builtins.any
+    (target: builtins.any (kind: kind == "proc-macro") target.kind)
     pkg.targets;
+
+  # Parse a raw feature string into a:
+  #
+  # ```rust
+  # enum FeatureValue {
+  #   Feature(String),
+  #   Dep { dep_name: String },
+  #   DepFeature { dep_name: String, dep_feature: String, weak: bool },
+  # }
+  # ```
+  _parseFeature = feat: let
+    isDep = builtins.match "dep:(.*)" feat;
+    isDepFeature = builtins.match "([^?]*)([?])?/(.*)" feat;
+  in
+    if isDep != null
+    then {
+      type = "dep";
+      depName = builtins.head isDep;
+    }
+    else if isDepFeature != null
+    then {
+      type = "depFeature";
+      depName = builtins.elemAt isDepFeature 0;
+      weak = (builtins.elemAt isDepFeature 1) != null;
+      depFeat = builtins.elemAt isDepFeature 2;
+    }
+    else {
+      type = "normal";
+      feat = feat;
+    };
 }

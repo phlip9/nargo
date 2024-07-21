@@ -18,8 +18,12 @@ lib.makeScope pkgs.newScope (self: {
   # The Rust binary used to generate the `Cargo.metadata.json` file.
   nargo-metadata = self.callPackage ./nargo-metadata.nix {};
 
+  # Rust `cfg(...)` expression parser and evaluator.
+  targetCfg = import ./targetCfg.nix {inherit lib;};
+
   # The cargo feature resolution algorithm, implemented in nix.
   resolve = import ./resolve.nix {
     inherit lib;
+    targetCfg = self.targetCfg;
   };
 })
