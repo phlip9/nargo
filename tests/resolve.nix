@@ -1,8 +1,11 @@
 {nargoLib}: {
   dumpWorkspace = let
-    metadata = builtins.readFile (builtins.fromJSON ../Cargo.metadata.json);
+    metadata = builtins.fromJSON (builtins.readFile ../Cargo.metadata.json);
     buildTarget = "x86_64-unknown-linux-gnu";
     hostTarget = "x86_64-unknown-linux-gnu";
   in
-    nargoLib.resolve.resolveFeatures {inherit metadata buildTarget hostTarget;};
+    nargoLib.resolve.resolveFeatures {
+      inherit metadata buildTarget hostTarget;
+      rootFeatures = ["foo" "bar"];
+    };
 }

@@ -43,6 +43,7 @@ pub struct Package<'a> {
     #[serde(serialize_with = "compact::deps")]
     pub deps: BTreeMap<PkgId<'a>, PkgDep<'a>>,
 
+    // TODO(phlip9): add `proc_macro: bool` if any target is a proc-macro?
     #[serde(serialize_with = "compact::targets")]
     pub targets: Vec<ManifestTarget<'a>>,
 }
