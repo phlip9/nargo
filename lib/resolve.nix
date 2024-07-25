@@ -70,9 +70,23 @@ in rec {
       if noDefaultFeatures
       then rootFeatures
       else (rootFeatures ++ ["default"]);
-  in
-    # Note: we can't use an attrset for the `key`, hence the list
-    builtins.genericClosure {
+
+    # This `genericClosure` call effectively walks the (pkgId, featFor, feat?)
+    # tree, calling `operator` exactly once for each `key`.
+    #
+    # Returns a list that looks like:
+    # ```
+    # [ { key = [ "crates/nargo-metadata#0.1.0" "normal" ]; }
+    #   { key = [ "#anyhow@1.0.86" "normal" "default" ]; }
+    #   { key = [ "#anyhow@1.0.86" "normal" ]; }
+    #   { key = [ "#quote@1.0.36" "build" "proc-macro2/proc-macro" ]; }
+    #   { key = [ "#syn@2.0.68" "build" "dep:quote" ]; }
+    #   { key = [ "#syn@2.0.68" "build" "proc-macro2/proc-macro" ]; } ]
+    # ```
+    #
+    # Note: we can't use an attrset for the `key` since they're not comparable,
+    # hence the list.
+    activationsList = builtins.genericClosure {
       startSet = _mkStartSet ctx rootPkgIds rootFeaturesWithDefault;
 
       # operator gets called _exactly once_ for each `key`
@@ -81,6 +95,165 @@ in rec {
         then (_activatePkg ctx (builtins.elemAt key 0) (builtins.elemAt key 1))
         else (_activateFv ctx (builtins.elemAt key 0) (builtins.elemAt key 1) (builtins.elemAt key 2));
     };
+
+    # Collect the `activationsList` into an attrset.
+    #
+    # {
+    #   "#syn@2.0.68" = {
+    #     build = {
+    #       feats = {
+    #         clone-impls = null;
+    #         derive = null;
+    #         parsing = null;
+    #         printing = null;
+    #         proc-macro = null;
+    #       };
+    #       deps = {
+    #         quote = null;
+    #         proc-macro2 = null;
+    #       };
+    #       deferred = [
+    #         { depFeat = "proc-macro"; depName = "quote"; .. }
+    #       ];
+    #     }
+    #   };
+    # }
+    #
+    # TODO(phlip9): save actual `depPkgId` alongside `key` for `dep` and `depFeature`?
+    activations =
+      # groupBy: pkgId
+      builtins.mapAttrs
+      (
+        # groupBy: featFor
+        _pkgId: keys:
+          builtins.mapAttrs (
+            # {
+            #   feats = { ... };
+            #   deps = { ... };
+            #   deferred = { ... };
+            # }
+            featFor: keys: let
+              parsedFeats =
+                builtins.map (
+                  {key}:
+                    if builtins.length key == 2
+                    then {}
+                    else (_parseFeature (builtins.elemAt key 2))
+                )
+                keys;
+
+              # Activated optional deps
+              deps = builtins.listToAttrs (
+                builtins.map (feat: {
+                  name = feat.depName;
+                  value = null;
+                })
+                (
+                  builtins.filter (
+                    feat: let
+                      type = feat.type or null;
+                    in
+                      type == "dep" || (type == "depFeature" && !(feat.weak or false))
+                  )
+                  parsedFeats
+                )
+              );
+            in {
+              # Activated normal features
+              feats = builtins.listToAttrs (
+                builtins.map (feat: {
+                  name = feat.feat;
+                  value = null;
+                })
+                (
+                  builtins.filter (
+                    feat:
+                      (feat.type or null) == "normal"
+                    # TODO(phlip9): don't think we can filter this out yet b/c
+                    # of weak dep checks.
+                    # && feat.feat != "default"
+                  )
+                  parsedFeats
+                )
+              );
+
+              # Activated optional deps
+              deps = deps;
+
+              # Deferred weak deps
+              deferred = (
+                builtins.filter
+                (
+                  feat:
+                    ((feat.type or null) == "depFeature")
+                    && feat.weak
+                    # We can pre-filter all weak dep features where the optional
+                    # dependency was never activated.
+                    && (deps ? ${feat.depName})
+                )
+                parsedFeats
+              );
+            }
+          )
+          (builtins.groupBy ({key}: builtins.elemAt key 1) keys)
+      )
+      (builtins.groupBy ({key}: builtins.elemAt key 0) activationsList);
+
+    # Check if any deferred weak dep features are unsatisfied.
+    # A weak dep feature is satisfied if:
+    # 1. optional dep `depName` is _not_ activated (weak dep feature is disabled).
+    #    This gets covered by the pre-filter above.
+    # 2. optional dep `depName` is activated and that dep's `depFeat` is
+    #    activated.
+    # Otherwise we need to go for another round of feature resolution.
+    unsatDeferred =
+      builtins.mapAttrs
+      (
+        pkgId: byFeatFor:
+          builtins.mapAttrs (
+            featFor: {
+              deferred,
+              feats,
+              deps,
+            }:
+              builtins.filter
+              (
+                idFeatKind: let
+                  depPkgId = builtins.elemAt idFeatKind 0;
+                  depFeatFor = builtins.elemAt idFeatKind 1;
+                  depPkgName = builtins.elemAt idFeatKind 3;
+
+                  depWeakFeat =
+                    builtins.elemAt
+                    (
+                      builtins.filter
+                      (weakFeat: weakFeat.depName == depPkgName)
+                      deferred
+                    )
+                    0;
+                in
+                  # TODO(phlip9): do we need to check "dep:${depName}"?
+                  !(activations.${depPkgId}.${depFeatFor}.feats ? ${depWeakFeat.depFeat})
+              )
+              (_pkgDepsFiltered ctx pkgId featFor (pkgDepName: pkgDepKind: (
+                builtins.any (weakFeat: weakFeat.depName == pkgDepName) deferred
+              )))
+          )
+          byFeatFor
+      )
+      activations;
+
+    anyUnsatDeferred =
+      builtins.any
+      (byFeatFor:
+        builtins.any
+        (unsat: builtins.length unsat > 0)
+        (builtins.attrValues byFeatFor))
+      (builtins.attrValues unsatDeferred);
+  in
+    unsatDeferred;
+  # anyUnsatDeferred;
+  # activationsList;
 
   # Activate a package with id `pkgId` for resovler target `featFor`.
   # This fn gets called _exactly once_ per `(pkgId, featFor)`.
@@ -178,7 +351,7 @@ in rec {
   # (pkg, build)  + (dep, normal) -> (dep, build)
   # (pkg, build)  + (dep, build)  -> (dep, build)
   #
-  # :: (Ctx, PkgId, FeatFor, (depName: pkgDepKind: -> bool)) -> [ [ DepPkgId FeatFor PkgDepKind ] ]
+  # :: (Ctx, PkgId, FeatFor, (depName: pkgDepKind: -> bool)) -> [ [ DepPkgId FeatFor PkgDepKind PkgDepName ] ]
   _pkgDepsFiltered = ctx: pkgId: featFor: depFilter: let
     deps = ctx.pkgs.${pkgId}.deps;
     depPkgIds = builtins.attrNames deps;
@@ -223,7 +396,7 @@ in rec {
                   else featFor
                 )
               else "build";
-          in [depPkgId depFeatFor pkgDepKind]
+          in [depPkgId depFeatFor pkgDepKind pkgDepName]
         )
         relevantPkgDepKinds
     )
