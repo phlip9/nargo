@@ -327,7 +327,7 @@ in rec {
                   #
                   # Don't enable if the implicit optional dependency feature
                   # wasn't created due to `dep:` hiding.
-                  if !parsedFeat.weak && ctx.${pkgId}.features ? parsedFeat.depName
+                  if !parsedFeat.weak && ctx.pkgs.${pkgId}.features ? ${parsedFeat.depName}
                   then [{key = [pkgId featFor parsedFeat.depName];}]
                   else []
                 )
