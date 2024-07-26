@@ -58,11 +58,7 @@ in rec {
     # Immutable context needed for feature resolution.
     ctx = {
       pkgs = metadata.packages;
-      buildTarget = buildTarget;
-      buildPlatform = buildPlatform;
       buildCfgs = targetCfg.platformToCfgs buildPlatform;
-      hostTarget = hostTarget;
-      hostPlatform = hostPlatform;
       hostCfgs = targetCfg.platformToCfgs hostPlatform;
     };
 
@@ -251,9 +247,10 @@ in rec {
         (builtins.attrValues byFeatFor))
       (builtins.attrValues unsatDeferred);
   in
-    unsatDeferred;
-  # anyUnsatDeferred;
-  # activationsList;
+    # TODO(phlip9): recurse if anyUnsatDeferred
+    if anyUnsatDeferred
+    then builtins.trace "WARN: unsatisfied deferred weak dependencies!" activations
+    else activations;
 
   # Activate a package with id `pkgId` for resovler target `featFor`.
   # This fn gets called _exactly once_ per `(pkgId, featFor)`.

@@ -19,6 +19,12 @@
       inherit cargoVendorDir name;
       src = srcCleaned;
     };
+    metadataJson = builtins.fromJSON (builtins.readFile (metadata + "/Cargo.metadata.json"));
+    resolveFeatures = nargoLib.resolve.resolveFeatures {
+      metadata = metadataJson;
+      buildTarget = "x86_64-unknown-linux-gnu";
+      hostTarget = "x86_64-unknown-linux-gnu";
+    };
   };
 
   mkLocalExample = src:
@@ -141,19 +147,19 @@ in {
   # nocargo tests
   #
 
-  nargo-build-deps = mkNocargoExample "build-deps";
-  nargo-build-feature-env-vars = mkNocargoExample "build-feature-env-vars";
-  nargo-cap-lints = mkNocargoExample "cap-lints";
-  nargo-crate-names = mkNocargoExample "crate-names";
-  nargo-custom-lib-name = mkNocargoExample "custom-lib-name";
-  nargo-features = mkNocargoExample "features";
-  nargo-libz-dynamic = mkNocargoExample "libz-dynamic";
-  nargo-libz-static = mkNocargoExample "libz-static";
-  nargo-lto-fat = mkNocargoExample "lto-fat";
-  nargo-lto-proc-macro = mkNocargoExample "lto-proc-macro";
-  nargo-lto-thin = mkNocargoExample "lto-thin";
-  nargo-tokio-app = mkNocargoExample "tokio-app";
-  nargo-workspace-inline = mkNocargoExample "workspace-inline";
-  nargo-workspace-proc-macro-lto = mkNocargoExample "workspace-proc-macro-lto";
-  nargo-workspace-virtual = mkNocargoExample "workspace-virtual";
+  nocargo-build-deps = mkNocargoExample "build-deps";
+  nocargo-build-feature-env-vars = mkNocargoExample "build-feature-env-vars";
+  nocargo-cap-lints = mkNocargoExample "cap-lints";
+  nocargo-crate-names = mkNocargoExample "crate-names";
+  nocargo-custom-lib-name = mkNocargoExample "custom-lib-name";
+  nocargo-features = mkNocargoExample "features";
+  nocargo-libz-dynamic = mkNocargoExample "libz-dynamic";
+  nocargo-libz-static = mkNocargoExample "libz-static";
+  nocargo-lto-fat = mkNocargoExample "lto-fat";
+  nocargo-lto-proc-macro = mkNocargoExample "lto-proc-macro";
+  nocargo-lto-thin = mkNocargoExample "lto-thin";
+  nocargo-tokio-app = mkNocargoExample "tokio-app";
+  nocargo-workspace-inline = mkNocargoExample "workspace-inline";
+  nocargo-workspace-proc-macro-lto = mkNocargoExample "workspace-proc-macro-lto";
+  nocargo-workspace-virtual = mkNocargoExample "workspace-virtual";
 }
