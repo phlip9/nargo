@@ -5,6 +5,18 @@ members = [
     "crates/nargo-metadata",
 ]
 
+[workspace.package]
+authors = [
+    "Philip Kannegaard Hayes <philiphayes9@gmail.com>",
+]
+edition = "2021"
+
+[workspace.dependencies]
+anyhow = "1"
+pico-args = { version = "0.5", features = ["eq-separator"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+
 [profile.release]
 panic = "abort"
 # lto = "thin"
