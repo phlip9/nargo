@@ -3,21 +3,22 @@ use std::{ffi::OsStr, path::PathBuf};
 use nargo_core::{fs, time};
 
 const HELP: &str = r#"
-nargo-metadata
+nargo-resolve
 
 USAGE:
-  nargo-metadata [--metadata METADATA]
+  nargo-resolve [--unit-graph UNITGRAPH]
 
 FLAGS:
-  -h, --help            Prints help information
+  -h, --help              Prints help information
 
 OPTIONS:
-  --metadata METADATA   Path to raw cargo-metadata json output. If left unset
-                        or set to "-", then this is read from stdin.
+  --unit-graph UNITGRAPH  Path to `cargo build --unit-graph` json output. If
+                          left unset or set to "-", then this is read from
+                          stdin.
 "#;
 
 pub struct Args {
-    metadata: Option<PathBuf>,
+    unit_graph: Option<PathBuf>,
 }
 
 impl Args {
@@ -30,7 +31,8 @@ impl Args {
         }
 
         let args = Args {
-            metadata: pargs.opt_value_from_os_str("--metadata", parse_path)?,
+            unit_graph: pargs
+                .opt_value_from_os_str("--unit-graph", parse_path)?,
         };
 
         Ok(args)
@@ -39,11 +41,11 @@ impl Args {
     pub fn run(self) {
         let buf = time!(
             "read input",
-            fs::read_file_or_stdin(self.metadata.as_deref())
+            fs::read_file_or_stdin(self.unit_graph.as_deref())
                 .expect("Failed to read `cargo metadata`")
         );
 
-        time!("run", crate::run::run(buf.as_slice()));
+        time!("run", crate::run(buf.as_slice()));
     }
 }
 

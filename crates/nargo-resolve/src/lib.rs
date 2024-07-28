@@ -1,3 +1,4 @@
+pub mod cli;
 mod unit_graph;
 
 use unit_graph::UnitGraph;

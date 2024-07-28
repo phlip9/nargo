@@ -3,6 +3,8 @@ use std::{
     io::{self, Write},
 };
 
+use nargo_core::time;
+
 use crate::{
     clean,
     input::{self, PkgId},

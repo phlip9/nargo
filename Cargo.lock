@@ -28,6 +28,7 @@ name = "nargo-metadata"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "nargo-core",
  "pico-args",
  "semver",
  "serde",
@@ -39,6 +40,7 @@ name = "nargo-resolve"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "nargo-core",
  "pico-args",
  "serde",
  "serde_json",

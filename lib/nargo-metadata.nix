@@ -28,7 +28,7 @@ rustPlatform.buildRustPackage {
     ];
   };
 
-  cargoHash = "sha256-BT1DihPUwCkS5DaBI8YfLScAm6u9YoGESTUFgc4AV9M=";
+  cargoHash = "sha256-aSslOF5ZO0DGdaZDjKzTTHtAZseLNZMHybiwNT7fU24=";
 
   cargoBuildFlags = ["--bin=nargo-metadata"];
 

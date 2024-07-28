@@ -2,18 +2,18 @@ use std::time::Instant;
 
 pub struct Timer {
     file: &'static str,
-    line: u32,
     label: &'static str,
     start: Instant,
+    line: u32,
 }
 
 impl Timer {
     pub fn new(file: &'static str, line: u32, label: &'static str) -> Self {
         Self {
             file,
-            line,
             label,
             start: Instant::now(),
+            line,
         }
     }
 }
@@ -30,6 +30,7 @@ impl Drop for Timer {
     }
 }
 
+#[macro_export]
 macro_rules! time {
     ($label:expr, $b:block) => {{
         let _timer =
