@@ -54,6 +54,8 @@ rustPlatform.buildRustPackage {
 
     resolve = resolve.resolveFeatures {
       metadata = builtins.fromJSON (builtins.readFile ../Cargo.metadata.json);
+      buildTarget = "x86_64-unknown-linux-gnu";
+      hostTarget = "x86_64-unknown-linux-gnu";
     };
   };
 

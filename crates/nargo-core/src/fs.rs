@@ -20,7 +20,7 @@ pub fn read_file_or_stdin(path: Option<&Path>) -> anyhow::Result<Vec<u8>> {
     }
 }
 
-fn read_file(path: &Path) -> anyhow::Result<Vec<u8>> {
+pub fn read_file(path: &Path) -> anyhow::Result<Vec<u8>> {
     let mut file = fs::OpenOptions::new().read(true).open(path)?;
     let mut buf = Vec::new();
     file.read_to_end(&mut buf)?;

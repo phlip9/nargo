@@ -2,6 +2,22 @@
 just-fmt:
     just --fmt --unstable
 
+# Run nargo-resolve test on local workspace
+nargo-resolve-workspace:
+    cargo run -p nargo-resolve -- \
+        --unit-graph <(just cargo-unit-graph) \
+        --resolve-features <(just resolve-features) \
+        --host-target x86_64-unknown-linux-gnu \
+        --workspace-root $(pwd)
+
+# Build cargo --unit-graph on local workspace
+cargo-unit-graph:
+    cargo build --frozen --unit-graph --target=x86_64-unknown-linux-gnu \
+        -Z unstable-options
+
+resolve-features:
+    nix eval --json .#packages.x86_64-linux.nargo-metadata.resolve
+
 # Generate Cargo.metadata.json file
 cargo-metadata-json:
     cargo metadata --format-version=1 --all-features \

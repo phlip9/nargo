@@ -1,4 +1,5 @@
 use anyhow::Context as _;
+use nargo_core::nargo;
 
 use crate::input::{self, DepKind, PkgId};
 
@@ -182,30 +183,7 @@ impl<'a> input::NodeDep<'a> {
 impl<'a> input::PkgId<'a> {
     fn clean(&mut self, ctx: Context<'a>) {
         let id = self.0;
-        self.0 = Self::clean_inner(id, ctx)
-            .with_context(|| "Failed to clean package id: '{id}'")
-            .unwrap();
-    }
-
-    fn clean_inner<'id>(id: &'id str, ctx: Context<'a>) -> Option<&'id str> {
-        // ex: "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/age#0.10.0"
-        //  -> "age#0.10.0"
-        // ex: "path+file:///nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source#dependencies@0.0.0"
-        // -> "dependencies@0.0.0"
-        if let Some(rest) = id.strip_prefix("path+file://") {
-            let rest = rest.strip_prefix(ctx.workspace_root)?;
-            let rest = rest.trim_start_matches(['#', '/']);
-            return Some(rest);
-        }
-
-        // ex: "registry+https://github.com/rust-lang/crates.io-index#aes-gcm@0.10.3"
-        // -> "#aes-gcm@0.10.3"
-        if let Some(rest) = id.strip_prefix(CRATES_IO_REGISTRY) {
-            return Some(rest);
-        }
-
-        // ex: (unchanged) "git+http://github.com/dtolnay/semver?branch=master#a6425e6f41ddc81c6d6dd60c68248e0f0ef046c7"
-        Some(id)
+        self.0 = nargo::PkgId::try_from_cargo_pkg_id(id, ctx.workspace_root).0;
     }
 }
 
@@ -218,35 +196,5 @@ impl<'a> input::Source<'a> {
         if self.0 == CRATES_IO_REGISTRY {
             self.0 = "crates.io"
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::{clean::Context, input::PkgId};
-
-    #[test]
-    fn test_pkg_id_clean() {
-        let ctx = Context {
-            workspace_root: "/nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source",
-        };
-        let id = "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/age#0.10.0";
-        let id_clean = PkgId::clean_inner(id, ctx);
-        assert_eq!(id_clean, Some("age#0.10.0"));
-
-        let ctx = Context {
-            workspace_root: "/nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source",
-        };
-        let id = "path+file:///nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source#dependencies@0.0.0";
-        let id_clean = PkgId::clean_inner(id, ctx);
-        assert_eq!(id_clean, Some("dependencies@0.0.0"));
-
-        let id = "registry+https://github.com/rust-lang/crates.io-index#aes-gcm@0.10.3";
-        let id_clean = PkgId::clean_inner(id, ctx);
-        assert_eq!(id_clean, Some("#aes-gcm@0.10.3"));
-
-        let id = "git+http://github.com/dtolnay/semver?branch=master#a6425e6f41ddc81c6d6dd60c68248e0f0ef046c7";
-        let id_clean = PkgId::clean_inner(id, ctx);
-        assert_eq!(id_clean, Some(id));
     }
 }

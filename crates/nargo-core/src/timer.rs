@@ -32,12 +32,12 @@ impl Drop for Timer {
 
 #[macro_export]
 macro_rules! time {
-    ($label:expr, $b:block) => {{
+    ($label:expr, $b:block $(,)?) => {{
         let _timer =
             $crate::timer::Timer::new(::std::file!(), ::std::line!(), $label);
         $b
     }};
-    ($label:expr, $e:expr) => {{
+    ($label:expr, $e:expr $(,)?) => {{
         time!($label, { $e })
     }};
     ($b:block) => {{
