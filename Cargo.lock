@@ -26,6 +26,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nargo-resolve"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "pico-args",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "pico-args"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

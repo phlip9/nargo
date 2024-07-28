@@ -1,0 +1,11 @@
+[package]
+name = "nargo-resolve"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+pico-args.workspace = true
+serde.workspace = true
+serde_json.workspace = true

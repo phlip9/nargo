@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
     "crates/nargo-metadata",
+    "crates/nargo-resolve",
 ]
 
 [workspace.package]

@@ -21,10 +21,12 @@ rustPlatform.buildRustPackage {
       ../Cargo.lock
       ../.cargo
       ../crates/nargo-metadata
+      ../crates/nargo-resolve/Cargo.toml
+      ../crates/nargo-resolve/src/lib.rs
     ];
   };
 
-  cargoHash = "sha256-mPqCm6gP40+2qPatge+HFJf+TGCf/PpMbRpPW1TrP4U=";
+  cargoHash = "sha256-gBwES2LwSYoGeeLjFpGnxHB7nz3IM/hEh2PdZEtMHoc=";
 
   cargoBuildFlags = ["--bin=nargo-metadata"];
 
@@ -41,6 +43,7 @@ rustPlatform.buildRustPackage {
           ../Cargo.lock
           ../.cargo
           ../crates/nargo-metadata/Cargo.toml
+          ../crates/nargo-resolve/Cargo.toml
         ];
       };
       cargoVendorDir = craneLib.vendorCargoDeps {cargoLock = ../. + "/Cargo.lock";};
