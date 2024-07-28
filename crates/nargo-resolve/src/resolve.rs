@@ -5,12 +5,14 @@
 use core::fmt;
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Deserialize, Serialize)]
 pub struct PkgId<'a>(pub &'a str);
 
-#[derive(Clone, Copy, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FeatFor {
     Build,
@@ -21,16 +23,17 @@ pub type ResolveFeatures<'a> = BTreeMap<PkgId<'a>, ByFeatFor<'a>>;
 
 pub type ByFeatFor<'a> = BTreeMap<FeatFor, PkgFeatForActivation<'a>>;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct PkgFeatForActivation<'a> {
     #[serde(borrow)]
     pub feats: BTreeMap<&'a str, ()>,
-
-    #[serde(borrow)]
-    pub deps: BTreeMap<&'a str, ()>,
-
-    // TODO
-    pub deferred: serde::de::IgnoredAny,
+    //
+    // // TODO
+    // #[serde(borrow)]
+    // pub deps: BTreeMap<&'a str, ()>,
+    //
+    // // TODO
+    // pub deferred: serde::de::IgnoredAny,
 }
 
 // --- impl PkgId --- //

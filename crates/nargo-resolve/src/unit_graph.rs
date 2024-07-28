@@ -128,8 +128,8 @@ impl<'a> UnitGraph<'a> {
                 feat_for,
                 resolve::PkgFeatForActivation {
                     feats,
-                    deps: BTreeMap::new(), // TODO,
-                    deferred: serde::de::IgnoredAny,
+                    // deps: BTreeMap::new(), // TODO,
+                    // deferred: serde::de::IgnoredAny,
                 },
             );
 

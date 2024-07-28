@@ -17,6 +17,20 @@
     {"name":"anyhow","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
    ]
   },
+  "#assert-json-diff@2.0.2": {
+   "name": "assert-json-diff",
+   "version": "2.0.2",
+   "source": "crates.io",
+   "edition": "2018",
+   "features": {},
+   "deps": {
+    "#serde@1.0.203": {"name":"serde","kinds":[{}]},
+    "#serde_json@1.0.120": {"name":"serde_json","kinds":[{}]}
+   },
+   "targets": [
+    {"name":"assert_json_diff","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
+   ]
+  },
   "#itoa@1.0.11": {
    "name": "itoa",
    "version": "1.0.11",
@@ -267,6 +281,7 @@
    "features": {},
    "deps": {
     "#anyhow@1.0.86": {"name":"anyhow","kinds":[{}]},
+    "#assert-json-diff@2.0.2": {"name":"assert_json_diff","kinds":[{}]},
     "#pico-args@0.5.0": {"name":"pico_args","kinds":[{"features":["eq-separator"]}]},
     "#serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
     "#serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]},
