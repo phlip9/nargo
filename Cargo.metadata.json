@@ -228,6 +228,20 @@
     {"name":"unicode_ident","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
    ]
   },
+  "crates/nargo-core#0.1.0": {
+   "name": "nargo-core",
+   "version": "0.1.0",
+   "edition": "2021",
+   "features": {},
+   "deps": {
+    "#anyhow@1.0.86": {"name":"anyhow","kinds":[{}]},
+    "#serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
+    "#serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]}
+   },
+   "targets": [
+    {"name":"nargo_core","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
+   ]
+  },
   "crates/nargo-metadata#0.1.0": {
    "name": "nargo-metadata",
    "version": "0.1.0",
@@ -257,15 +271,18 @@
     "#serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]}
    },
    "targets": [
+    {"name":"nargo-resolve","kind":["bin"],"crate_types":["bin"],"path":"src/main.rs","edition":"2021"},
     {"name":"nargo_resolve","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
    ]
   }
  },
  "workspace_members": [
+  "crates/nargo-core#0.1.0",
   "crates/nargo-metadata#0.1.0",
   "crates/nargo-resolve#0.1.0"
  ],
  "workspace_default_members": [
+  "crates/nargo-core#0.1.0",
   "crates/nargo-metadata#0.1.0",
   "crates/nargo-resolve#0.1.0"
  ]
