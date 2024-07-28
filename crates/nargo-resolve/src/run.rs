@@ -5,7 +5,7 @@ use crate::{resolve::ResolveFeatures, unit_graph::UnitGraph};
 pub fn run(
     unit_graph_bytes: &[u8],
     resolve_features_bytes: &[u8],
-    _host_target: &str,
+    host_target: &str,
     workspace_root: &str,
 ) {
     let unit_graph: UnitGraph<'_> = time!(
@@ -14,7 +14,14 @@ pub fn run(
             "Failed to deserialize `cargo build --unit-graph` json output"
         ),
     );
-    let _cargo_pkg_id_map = unit_graph.build_pkg_id_map(workspace_root);
+    let cargo_pkg_id_map = unit_graph.build_pkg_id_map(workspace_root);
+    let cargo_resolve_features =
+        unit_graph.build_resolve_features(&cargo_pkg_id_map, host_target);
+
+    dbg!(cargo_resolve_features
+        .keys()
+        .map(|pkg_id| pkg_id.0)
+        .collect::<Vec<_>>());
 
     let _nargo_resolve_features: ResolveFeatures<'_> = time!(
         "deserialize resolve features JSON",

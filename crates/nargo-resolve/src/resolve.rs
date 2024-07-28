@@ -2,14 +2,15 @@
 
 #![allow(dead_code)]
 
+use core::fmt;
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
-#[derive(Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-pub struct PkgId<'a>(&'a str);
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PkgId<'a>(pub &'a str);
 
-#[derive(Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum FeatFor {
     Build,
@@ -29,5 +30,30 @@ pub struct PkgFeatForActivation<'a> {
     pub deps: BTreeMap<&'a str, ()>,
 
     // TODO
-    deferred: serde::de::IgnoredAny,
+    pub deferred: serde::de::IgnoredAny,
+}
+
+// --- impl PkgId --- //
+
+impl<'a> fmt::Display for PkgId<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
+// --- impl FeatFor --- //
+
+impl FeatFor {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Build => "build",
+            Self::Normal => "normal",
+        }
+    }
+}
+
+impl fmt::Display for FeatFor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
 }

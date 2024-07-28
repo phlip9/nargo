@@ -8,6 +8,8 @@ use anyhow::Context;
 use nargo_core::nargo;
 use serde::Deserialize;
 
+use crate::resolve;
+
 #[derive(Deserialize)]
 pub struct UnitGraph<'a> {
     pub version: u32,
@@ -21,7 +23,8 @@ pub struct UnitGraph<'a> {
 #[derive(Deserialize)]
 pub struct Unit<'a> {
     pub pkg_id: &'a str,
-    // pub target: UnitTarget,
+    #[serde(borrow)]
+    pub target: UnitTarget<'a>,
     // pub profile: UnitProfile,
     pub platform: Option<&'a str>,
     pub mode: &'a str,
@@ -30,11 +33,12 @@ pub struct Unit<'a> {
     // pub dependencies: Vec<UnitDep>,
 }
 
-// #[derive(Deserialize)]
-// pub struct UnitTarget {
-//     // TODO
-// }
-//
+#[derive(Deserialize)]
+pub struct UnitTarget<'a> {
+    #[serde(borrow)]
+    kind: Vec<&'a str>,
+}
+
 // #[derive(Deserialize)]
 // pub struct UnitProfile {
 //     // TODO
@@ -75,6 +79,73 @@ impl<'a> UnitGraph<'a> {
                 (unit.pkg_id, nargo_pkg_id.0.to_owned())
             })
             .collect()
+    }
+
+    /// Try to build our own nargo feature resolution from the cargo unit-graph
+    /// output.
+    pub(crate) fn build_resolve_features(
+        &'a self,
+        pkg_id_map: &'a BTreeMap<&'a str, String>,
+        host_target: &'a str,
+    ) -> resolve::ResolveFeatures<'a> {
+        let mut resolve = BTreeMap::new();
+
+        for unit in &self.units {
+            if unit.mode != "build" {
+                continue;
+            }
+            let target_kinds = &unit.target.kind;
+            if !(target_kinds.contains(&"lib")
+                || target_kinds.contains(&"proc-macro"))
+            {
+                continue;
+            }
+
+            let unit_pkg_id = unit.pkg_id;
+            let nargo_pkg_id = resolve::PkgId(&pkg_id_map[unit.pkg_id]);
+            let feat_for = match unit.platform {
+                None => resolve::FeatFor::Build,
+                Some(target) if target == host_target =>
+                    resolve::FeatFor::Normal,
+                Some(target) => panic!(
+                    "Error building our feature resolution type from the cargo unit-graph:\n\
+                     Found unit with unexpected target triple: '{target}'\n\
+                        --host-target: {host_target}\n\
+                          cargo pkg_id: {unit_pkg_id}\n\
+                          nargo pkg_id: {nargo_pkg_id}\n\
+                     ",
+                ),
+            };
+            let feats = unit
+                .features
+                .iter()
+                .map(|feat| (*feat, ()))
+                .collect::<BTreeMap<_, ()>>();
+
+            let by_feat_for: &mut resolve::ByFeatFor<'_> =
+                resolve.entry(nargo_pkg_id).or_default();
+            let prev = by_feat_for.insert(
+                feat_for,
+                resolve::PkgFeatForActivation {
+                    feats,
+                    deps: BTreeMap::new(), // TODO,
+                    deferred: serde::de::IgnoredAny,
+                },
+            );
+
+            if prev.is_some() {
+                panic!(
+                    "Bug: multiple activations for this (pkg_id, feat_for):\n\
+                       cargo pkg_id: {unit_pkg_id}\n\
+                       nargo pkg_id: {nargo_pkg_id}\n\
+                           feat_for: {feat_for}\n\
+                      --host-target: {host_target}\n\
+                    "
+                );
+            }
+        }
+
+        resolve
     }
 }
 
