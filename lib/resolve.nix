@@ -274,16 +274,10 @@ in rec {
     else throw "unknown feature type: ${feat}";
 
   # activate a normal feature (ex: "rt-multi-threaded")
-  _activateFvNormal = ctx: pkgId: featFor: feat: let
-    features = ctx.pkgs.${pkgId}.features;
-
-    # Be lenient with `feat = "default"`, but strict with all others.
-    activatedFeats =
-      if feat == "default"
-      then features.default or []
-      else features.${feat};
-  in
-    builtins.map (pkgFeat: {key = [pkgId featFor pkgFeat];}) activatedFeats;
+  _activateFvNormal = ctx: pkgId: featFor: feat:
+    builtins.map
+    (pkgFeat: {key = [pkgId featFor pkgFeat];})
+    (ctx.pkgs.${pkgId}.features.${feat});
 
   # activate an optional dep feature (ex: "dep:serde_derive")
   # TODO(phlip9): somehow handle weak dep feature upon activation

@@ -194,6 +194,8 @@ impl<'a> PkgDep<'a> {
         let dep_manifest_path =
             dep_manifest.relative_workspace_path(ctx.workspace_root);
         let dep_manifest_version = &dep_manifest.version;
+        let dep_manifest_has_default_feat =
+            dep_manifest.features.contains_key("default");
 
         let manifest = &manifests[&id];
 
@@ -244,7 +246,15 @@ dependency: {{
         let kinds = dep
             .dep_kinds
             .into_iter()
-            .map(|kind| PkgDepKind::from_input(id, dep_id, deps_arena, kind))
+            .map(|kind| {
+                PkgDepKind::from_input(
+                    id,
+                    dep_id,
+                    dep_manifest_has_default_feat,
+                    deps_arena,
+                    kind,
+                )
+            })
             .collect();
 
         PkgDep {
@@ -262,6 +272,7 @@ impl<'a> PkgDepKind<'a> {
     fn from_input(
         id: PkgId<'a>,
         dep_id: PkgId<'a>,
+        dep_manifest_has_default_feat: bool,
         deps_for_pkg_dep: &[&'a input::ManifestDependency<'a>],
         node_dep_kind: input::NodeDepKind<'a>,
     ) -> Self {
@@ -295,11 +306,20 @@ impl<'a> PkgDepKind<'a> {
             ",
         );
 
+        // If dep_pkg doesn't actually have a "default" feature, then set
+        // `default` to `false` unconditionally. This removes several extra
+        // checks from the `resolveFeatures` nix fn.
+        let default = if !dep_manifest_has_default_feat {
+            false
+        } else {
+            manifest_dep_entry.uses_default_features
+        };
+
         Self {
             kind,
             target: target.map(Platform::from_input),
             optional: manifest_dep_entry.optional,
-            default: manifest_dep_entry.uses_default_features,
+            default,
             features: &manifest_dep_entry.features,
         }
     }
