@@ -8,12 +8,13 @@
   generateCargoMetadata,
   lib,
   resolve,
-  rustPlatform,
+  nargoVendoredCargoDeps,
 }:
-rustPlatform.buildRustPackage {
+craneLib.buildPackage {
   pname = "nargo-metadata";
   version = "0.1.0";
 
+  cargoVendorDir = nargoVendoredCargoDeps;
   src = lib.fileset.toSource {
     root = ../.;
     fileset = lib.fileset.unions [
@@ -27,11 +28,12 @@ rustPlatform.buildRustPackage {
     ];
   };
 
-  cargoHash = "sha256-YxVnt12cv5DfXRuhGkNbs+HlrclvH8hE58Prt8UVBp8=";
+  cargoExtraArgs = "--bin=nargo-metadata";
 
-  cargoBuildFlags = ["--bin=nargo-metadata"];
-
+  cargoArtifacts = null;
   doCheck = false;
+  doInstallCargoArtifacts = false;
+  strictDeps = true;
 
   passthru = {
     metadata = generateCargoMetadata {
@@ -48,7 +50,7 @@ rustPlatform.buildRustPackage {
           ../crates/nargo-resolve/Cargo.toml
         ];
       };
-      cargoVendorDir = craneLib.vendorCargoDeps {cargoLock = ../. + "/Cargo.lock";};
+      cargoVendorDir = nargoVendoredCargoDeps;
     };
 
     resolve = resolve.resolveFeatures {

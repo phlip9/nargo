@@ -6,6 +6,5 @@
   in
     nargoLib.resolve.resolveFeatures {
       inherit metadata buildTarget hostTarget;
-      rootFeatures = ["foo" "bar"];
     };
 }
