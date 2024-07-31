@@ -23,7 +23,7 @@ pub type ResolveFeatures<'a> = BTreeMap<PkgId<'a>, ByFeatFor<'a>>;
 
 pub type ByFeatFor<'a> = BTreeMap<FeatFor, PkgFeatForActivation<'a>>;
 
-#[derive(Deserialize, Serialize)]
+#[derive(PartialEq, Deserialize, Serialize)]
 pub struct PkgFeatForActivation<'a> {
     #[serde(borrow)]
     pub feats: BTreeMap<&'a str, ()>,

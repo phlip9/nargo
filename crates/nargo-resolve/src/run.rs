@@ -21,19 +21,19 @@ pub fn run(
     );
 
     let cargo_pkg_id_map = unit_graph.build_pkg_id_map(workspace_root);
-    let cargo_resolve_features =
-        unit_graph.build_resolve_features(&cargo_pkg_id_map, host_target);
-
-    // dbg!(cargo_resolve_features
-    //     .keys()
-    //     .map(|pkg_id| pkg_id.0)
-    //     .collect::<Vec<_>>());
+    let cargo_resolve_features = time!(
+        "cargo resolve features",
+        unit_graph.build_resolve_features(&cargo_pkg_id_map, host_target)
+    );
 
     let nargo_resolve_features: ResolveFeatures<'_> = time!(
-        "deserialize resolve features JSON",
+        "deserialize nargo resolve features JSON",
         serde_json::from_slice(resolve_features_bytes)
             .expect("Failed to deserialize nix eval'd `resolveFeatures` JSON"),
     );
 
-    assert_json_eq!(nargo_resolve_features, cargo_resolve_features);
+    time!(
+        "compare",
+        assert_json_eq!(nargo_resolve_features, cargo_resolve_features),
+    );
 }
