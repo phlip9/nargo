@@ -15,16 +15,75 @@
   in rec {
     src = srcCleaned;
     cargoVendorDir = craneLib.vendorCargoDeps {src = srcCleaned;};
-    metadata = nargoLib.generateCargoMetadata {
+
+    metadataDrv = nargoLib.generateCargoMetadata {
       inherit cargoVendorDir name;
       src = srcCleaned;
     };
-    metadataJson = builtins.fromJSON (builtins.readFile (metadata + "/Cargo.metadata.json"));
+    metadata = builtins.fromJSON (builtins.readFile (metadataDrv + "/Cargo.metadata.json"));
+
+    buildTarget = pkgs.buildPlatform.rust.rustcTarget;
+    hostTarget = "x86_64-unknown-linux-gnu";
+
     resolveFeatures = nargoLib.resolve.resolveFeatures {
-      metadata = metadataJson;
-      buildTarget = "x86_64-unknown-linux-gnu";
-      hostTarget = "x86_64-unknown-linux-gnu";
+      inherit metadata buildTarget hostTarget;
     };
+
+    # `cargo build --unit-graph`
+    cargoUnitGraph =
+      pkgs.pkgsBuildBuild.runCommandLocal "${name}-unit-graph.json" {
+        depsBuildBuild = [pkgs.cargo];
+        env = {
+          inherit cargoVendorDir hostTarget;
+          cargoSrc = "${srcCleaned}";
+        };
+      }
+      ''
+        export CARGO_TARGET_DIR="$PWD/target"
+        export CARGO_HOME="$PWD/.cargo-home"
+        mkdir "$CARGO_HOME"
+        ln -s "$cargoVendorDir/config.toml" "$CARGO_HOME/config.toml"
+
+        (
+          set -x;
+
+          cargo build --unit-graph --manifest-path="$cargoSrc/Cargo.toml" \
+            --frozen --target="$hostTarget" -Z unstable-options \
+            > "$out";
+
+          set +x;
+        )
+      '';
+
+    # Check that our feature resolution matches cargo's.
+    # `nargo-resolve --unit-graph $cargoUnitGraph --resolve-features $resolveFeatures`
+    checkResolveFeatures =
+      pkgs.pkgsBuildBuild.runCommandLocal "${name}-check-resolve" {
+        depsBuildBuild = [nargoLib.nargo-resolve];
+
+        env = {
+          inherit cargoUnitGraph hostTarget;
+          cargoSrc = "${srcCleaned}";
+        };
+
+        # Expose `resolveFeaturesJson` in the derivation as a file with path
+        # `$resolveFeaturesJsonPath`.
+        resolveFeaturesJson = builtins.toJSON resolveFeatures;
+        passAsFile = ["resolveFeaturesJson"];
+      } ''
+        (
+          set -x;
+
+          nargo-resolve \
+            --unit-graph "$cargoUnitGraph" \
+            --resolve-features "$resolveFeaturesJsonPath" \
+            --host-target "$hostTarget" \
+            --workspace-root "$cargoSrc" \
+            > "$out";
+
+          set +x
+        )
+      '';
   };
 
   mkLocalExample = src:

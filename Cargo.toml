@@ -7,6 +7,10 @@ members = [
     "crates/nargo-resolve",
 ]
 
+exclude = [
+    "tests/examples"
+]
+
 [workspace.package]
 authors = [
     "Philip Kannegaard Hayes <philiphayes9@gmail.com>",
