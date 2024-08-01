@@ -68,10 +68,12 @@ in rec {
 
   checks = builtins.listToAttrs (lib.flatten (_flattenTests "tests" {
     targetCfg = targetCfg;
+    examples = builtins.mapAttrs (_: value:
+      builtins.intersectAttrs {
+        metadataDrv = null;
+        checkResolveFeatures = null;
+      }
+      value)
+    examples;
   }));
-  # (mapAttrs' (name: value: {
-  #     name = "examples-${name}-metadata";
-  #     value = value.metadata;
-  #   })
-  #   examples)
 }

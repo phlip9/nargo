@@ -214,10 +214,10 @@ in rec {
             }:
               builtins.filter
               (
-                idFeatKind: let
-                  depPkgId = builtins.elemAt idFeatKind 0;
-                  depFeatFor = builtins.elemAt idFeatKind 1;
-                  depPkgName = builtins.elemAt idFeatKind 3;
+                idFeatKindName: let
+                  depPkgId = builtins.elemAt idFeatKindName 0;
+                  depFeatFor = builtins.elemAt idFeatKindName 1;
+                  depPkgName = builtins.elemAt idFeatKindName 3;
 
                   depWeakFeat =
                     builtins.elemAt
@@ -247,6 +247,7 @@ in rec {
         (builtins.attrValues byFeatFor))
       (builtins.attrValues unsatDeferred);
   in
+    # activationsList;
     # TODO(phlip9): recurse if anyUnsatDeferred
     if anyUnsatDeferred
     then builtins.trace "WARN: unsatisfied deferred weak dependencies!" activations
@@ -284,7 +285,12 @@ in rec {
   _activateFvDep = ctx: pkgId: featFor: depName:
     builtins.concatMap
     _activateFilteredPkgDepFeatures
-    (_pkgDepsFiltered ctx pkgId featFor (pkgDepName: _pkgDepKind: pkgDepName == depName));
+    (_pkgDepsFiltered ctx pkgId featFor (
+      pkgDepName: pkgDepKind:
+      # TODO(phlip9): is this `optional` check ok?
+        (pkgDepKind.optional or false)
+        && (pkgDepName == depName)
+    ));
 
   # Activate a transitive dep feature (ex: "serde/std", "quote?/proc-macro")
   # NOTE: Currently we ignore all weak dep features
@@ -295,10 +301,10 @@ in rec {
     else
       builtins.concatMap
       (
-        idFeatKind: let
-          depPkgId = builtins.elemAt idFeatKind 0;
-          depFeatFor = builtins.elemAt idFeatKind 1;
-          depPkgDepKind = builtins.elemAt idFeatKind 2;
+        idFeatKindName: let
+          depPkgId = builtins.elemAt idFeatKindName 0;
+          depFeatFor = builtins.elemAt idFeatKindName 1;
+          depPkgDepKind = builtins.elemAt idFeatKindName 2;
         in
           # Activate the feature on the dependency itself
           [{key = [depPkgId depFeatFor parsedFeat.depFeat];}]
@@ -394,10 +400,10 @@ in rec {
     depPkgIds;
 
   # Activate the features for each dep returned from `_pkgDepsFiltered`.
-  _activateFilteredPkgDepFeatures = idFeatKind: let
-    depPkgId = builtins.elemAt idFeatKind 0;
-    depFeatFor = builtins.elemAt idFeatKind 1;
-    depPkgDepKind = builtins.elemAt idFeatKind 2;
+  _activateFilteredPkgDepFeatures = idFeatKindName: let
+    depPkgId = builtins.elemAt idFeatKindName 0;
+    depFeatFor = builtins.elemAt idFeatKindName 1;
+    depPkgDepKind = builtins.elemAt idFeatKindName 2;
     depFeatsWithDefault =
       (depPkgDepKind.features or [])
       ++ (

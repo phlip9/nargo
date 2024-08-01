@@ -74,7 +74,7 @@
     "span-locations": []
    },
    "deps": {
-    "#unicode-ident@1.0.12": {"name":"unicode_ident","kinds":[{"default":false}]}
+    "#unicode-ident@1.0.12": {"name":"unicode-ident","kinds":[{"default":false}]}
    },
    "targets": [
     {"name":"build-script-build","kind":["custom-build"],"crate_types":["bin"],"path":"build.rs","edition":"2021"},
@@ -92,7 +92,7 @@
     "proc-macro": ["proc-macro2/proc-macro"]
    },
    "deps": {
-    "#proc-macro2@1.0.86": {"name":"proc_macro2","kinds":[{"default":false}]}
+    "#proc-macro2@1.0.86": {"name":"proc-macro2","kinds":[{"default":false}]}
    },
    "targets": [
     {"name":"quote","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
@@ -166,7 +166,7 @@
     "deserialize_in_place": []
    },
    "deps": {
-    "#proc-macro2@1.0.86": {"name":"proc_macro2","kinds":[{"default":false,"features":["proc-macro"]}]},
+    "#proc-macro2@1.0.86": {"name":"proc-macro2","kinds":[{"default":false,"features":["proc-macro"]}]},
     "#quote@1.0.36": {"name":"quote","kinds":[{"default":false,"features":["proc-macro"]}]},
     "#syn@2.0.68": {"name":"syn","kinds":[{"default":false,"features":["clone-impls","derive","parsing","printing","proc-macro"]}]}
    },
@@ -222,9 +222,9 @@
     "visit-mut": []
    },
    "deps": {
-    "#proc-macro2@1.0.86": {"name":"proc_macro2","kinds":[{"default":false}]},
+    "#proc-macro2@1.0.86": {"name":"proc-macro2","kinds":[{"default":false}]},
     "#quote@1.0.36": {"name":"quote","kinds":[{"optional":true,"default":false}]},
-    "#unicode-ident@1.0.12": {"name":"unicode_ident","kinds":[{"default":false}]}
+    "#unicode-ident@1.0.12": {"name":"unicode-ident","kinds":[{"default":false}]}
    },
    "targets": [
     {"name":"syn","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
@@ -263,11 +263,11 @@
    "features": {},
    "deps": {
     "#anyhow@1.0.86": {"name":"anyhow","kinds":[{}]},
-    "#pico-args@0.5.0": {"name":"pico_args","kinds":[{"features":["eq-separator"]}]},
+    "#pico-args@0.5.0": {"name":"pico-args","kinds":[{"features":["eq-separator"]}]},
     "#semver@1.0.23": {"name":"semver","kinds":[{"features":["serde"]}]},
     "#serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
     "#serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]},
-    "crates/nargo-core#0.1.0": {"name":"nargo_core","kinds":[{"default":false}]}
+    "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{"default":false}]}
    },
    "targets": [
     {"name":"nargo-metadata","kind":["bin"],"crate_types":["bin"],"path":"src/main.rs","edition":"2021"},
@@ -281,11 +281,11 @@
    "features": {},
    "deps": {
     "#anyhow@1.0.86": {"name":"anyhow","kinds":[{}]},
-    "#assert-json-diff@2.0.2": {"name":"assert_json_diff","kinds":[{"default":false}]},
-    "#pico-args@0.5.0": {"name":"pico_args","kinds":[{"features":["eq-separator"]}]},
+    "#assert-json-diff@2.0.2": {"name":"assert-json-diff","kinds":[{"default":false}]},
+    "#pico-args@0.5.0": {"name":"pico-args","kinds":[{"features":["eq-separator"]}]},
     "#serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
     "#serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]},
-    "crates/nargo-core#0.1.0": {"name":"nargo_core","kinds":[{"default":false}]}
+    "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{"default":false}]}
    },
    "targets": [
     {"name":"nargo-resolve","kind":["bin"],"crate_types":["bin"],"path":"src/main.rs","edition":"2021"},

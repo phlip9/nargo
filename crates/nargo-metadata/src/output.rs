@@ -243,6 +243,15 @@ dependency: {{
             dump::manifest_deps(&manifest.dependencies),
         );
 
+        // We'll use the pre-snake-case-transformed dep entry rename/dep
+        // manifest name (i.e., "iana-time-zone" not "iana_time_zone") to make
+        // it easier on the nix side to map `dep:<depName>` features to their
+        // corresponding optional dep entries correctly.
+        let dep_entry_name = {
+            let manifest_dep = deps_arena.first().unwrap();
+            manifest_dep.rename.unwrap_or(manifest_dep.name)
+        };
+
         let kinds = dep
             .dep_kinds
             .into_iter()
@@ -253,12 +262,13 @@ dependency: {{
                     dep_manifest_has_default_feat,
                     deps_arena,
                     kind,
+                    dep_entry_name,
                 )
             })
             .collect();
 
         PkgDep {
-            name: dep.name,
+            name: dep_entry_name,
             kinds,
         }
     }
@@ -275,6 +285,7 @@ impl<'a> PkgDepKind<'a> {
         dep_manifest_has_default_feat: bool,
         deps_for_pkg_dep: &[&'a input::ManifestDependency<'a>],
         node_dep_kind: input::NodeDepKind<'a>,
+        expected_dep_entry_name: &'a str,
     ) -> Self {
         let kind = node_dep_kind.kind;
         let target = node_dep_kind.target;
@@ -287,23 +298,34 @@ impl<'a> PkgDepKind<'a> {
         let manifest_dep_entry = iter
             .next()
             .with_context(|| format!(
-                "There are no matching Cargo.toml dependency entries with this (kind, target):\n\
-                       package id: '{id}'\n\
-                    dependency id: '{dep_id}'\n\
-                    dependency kind: {kind}\n\
-                    dependency target: {target:?}\n\
-                ",
+                r#"There are no matching Cargo.toml dependency entries with this (kind, target):
+       package id: '{id}'
+    dependency id: '{dep_id}'
+    dependency kind: {kind}
+    dependency target: {target:?}
+"#,
             ))
             .unwrap();
 
         assert!(
             iter.next().is_none(),
-            "There are too many matching Cargo.toml dependency entries with this (kind, target):\n\
-                   package id: '{id}'\n\
-                dependency id: '{dep_id}'\n\
-                dependency kind: {kind}\n\
-                dependency target: {target:?}\n\
-            ",
+            r#"There are too many matching Cargo.toml dependency entries with this (kind, target):
+       package id: '{id}'
+    dependency id: '{dep_id}'
+    dependency kind: {kind}
+    dependency target: {target:?}
+"#,
+        );
+
+        assert_eq!(
+            manifest_dep_entry.rename.unwrap_or(manifest_dep_entry.name),
+            expected_dep_entry_name,
+            r#"The Cargo.toml manfiest dep entry rename/name appears inconsistent:
+       package id: '{id}'
+    dependency id: '{dep_id}'
+    dependency kind: {kind}
+    dependency target: {target:?}
+"#
         );
 
         // If dep_pkg doesn't actually have a "default" feature, then set
