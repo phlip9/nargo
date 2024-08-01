@@ -37,6 +37,7 @@
 
     tests = eachSystem (system:
       import ./tests {
+        lib = inputs.nixpkgs.lib;
         craneLib = systemCraneLib.${system};
         inputs = inputs;
         nargoLib = systemNargoLib.${system};
