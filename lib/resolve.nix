@@ -9,6 +9,7 @@
   # build instance (workspace packages, workspace targets, target platform,
   # features), this function resolves the features and optional dependencies
   # for all transitively selected packages.
+  # TODO(phlip9): preprocess `metadata` so all features and cfg's are parsed?
   resolveFeatures = {
     # JSON-deserialized `Cargo.metadata.json`
     metadata,
@@ -57,13 +58,19 @@
       pkgs = metadata.packages;
       buildCfgs = targetCfg.platformToCfgs buildPlatform;
       hostCfgs = targetCfg.platformToCfgs hostPlatform;
+      # This will be `resolved` from each previous recursion.
+      prevResolved = null;
     };
 
     rootFeaturesWithDefault =
       if noDefaultFeatures
       then rootFeatures
       else (rootFeatures ++ ["default"]);
+  in
+    _resolveFeaturesRec ctx 0 (_mkInitialStartSet ctx rootPkgIds rootFeaturesWithDefault);
 
+  # Recurse until we resolve all unsatisfied weak dep features.
+  _resolveFeaturesRec = ctx: iter: startSet: let
     # This `genericClosure` call effectively walks the (pkgId, featFor, feat?)
     # tree, calling `operator` exactly once for each `key`.
     #
@@ -80,12 +87,18 @@
     # Note: we can't use an attrset for the `key` since they're not comparable,
     # hence the list.
     activationsList = builtins.genericClosure {
-      startSet = _mkStartSet ctx rootPkgIds rootFeaturesWithDefault;
+      startSet = startSet;
 
-      # operator gets called _exactly once_ for each `key`
-      operator = {key}:
-        if builtins.length key == 2
+      # `operator` gets called _exactly once_ for each `op`
+      operator = {key, ...} @ op:
+      # # We already activated this in a previous recursion, so no need to do
+      # # anything here.
+        if op ? done
+        then []
+        # Activate all (non-optional) dependencies of this package.
+        else if builtins.length key == 2
         then (_activatePkg ctx (builtins.elemAt key 0) (builtins.elemAt key 1))
+        # Activate a feature of this package.
         else (_activateFv ctx (builtins.elemAt key 0) (builtins.elemAt key 1) (builtins.elemAt key 2));
     };
 
@@ -113,7 +126,8 @@
     # }
     #
     # TODO(phlip9): save actual `depPkgId` alongside `key` for `dep` and `depFeature`?
-    activations =
+    # TODO(phlip9): reuse `ctx.prevResolved` to avoid extra work
+    resolved =
       # groupBy: pkgId
       builtins.mapAttrs
       (
@@ -128,7 +142,7 @@
             featFor: keys: let
               parsedFeats =
                 builtins.map (
-                  {key}:
+                  {key, ...}:
                     if builtins.length key == 2
                     then {}
                     else (_parseFeature (builtins.elemAt key 2))
@@ -188,9 +202,9 @@
               );
             }
           )
-          (builtins.groupBy ({key}: builtins.elemAt key 1) keys)
+          (builtins.groupBy ({key, ...}: builtins.elemAt key 1) keys)
       )
-      (builtins.groupBy ({key}: builtins.elemAt key 0) activationsList);
+      (builtins.groupBy ({key, ...}: builtins.elemAt key 0) activationsList);
 
     # Check if any deferred weak dep features are unsatisfied.
     # A weak dep feature is satisfied if:
@@ -199,6 +213,21 @@
     # 2. optional dep `depName` is activated and that dep's `depFeat` is
     #    activated.
     # Otherwise we need to go for another round of feature resolution.
+    #
+    # {
+    #   "#zerocopy@0.8.0-alpha.6" = { normal = []; };
+    #   "rand@0.9.0-alpha.1" = {
+    #     normal = [
+    #       {
+    #         depFeat = "std";
+    #         depName = "rand_chacha";
+    #         type = "depFeature";
+    #         weak = true;
+    #       }
+    #     ];
+    #   };
+    #   # ...
+    # }
     unsatDeferred =
       builtins.mapAttrs
       (
@@ -208,34 +237,43 @@
               deferred,
               feats,
               deps,
-            }:
-              builtins.filter
-              (
-                idFeatKindName: let
-                  depPkgId = builtins.elemAt idFeatKindName 0;
-                  depFeatFor = builtins.elemAt idFeatKindName 1;
-                  depPkgName = builtins.elemAt idFeatKindName 3;
+            }: let
+              deferredPkgDeps = _pkgDepsFiltered ctx pkgId featFor (pkgDepName: pkgDepKind: (
+                (pkgDepKind.optional or false)
+                && builtins.any (weakFeat: weakFeat.depName == pkgDepName) deferred
+              ));
 
-                  depWeakFeat =
-                    builtins.elemAt
-                    (
-                      builtins.filter
-                      (weakFeat: weakFeat.depName == depPkgName)
-                      deferred
+              unsatDeferred =
+                builtins.filter
+                (
+                  {
+                    depFeat,
+                    depName,
+                    ...
+                  }:
+                    builtins.all (
+                      idFeatKindName: let
+                        depPkgId = builtins.elemAt idFeatKindName 0;
+                        depFeatFor = builtins.elemAt idFeatKindName 1;
+                        depPkgName = builtins.elemAt idFeatKindName 3;
+                      in
+                        # # skip irrelevant
+                        if depPkgName != depName
+                        then true
+                        else !(resolved.${depPkgId}.${depFeatFor}.feats ? ${depFeat})
                     )
-                    0;
-                in
-                  # TODO(phlip9): do we need to check "dep:${depName}"?
-                  !(activations.${depPkgId}.${depFeatFor}.feats ? ${depWeakFeat.depFeat})
-              )
-              (_pkgDepsFiltered ctx pkgId featFor (pkgDepName: pkgDepKind: (
-                builtins.any (weakFeat: weakFeat.depName == pkgDepName) deferred
-              )))
+                    deferredPkgDeps
+                )
+                deferred;
+            in
+              unsatDeferred
           )
           byFeatFor
       )
-      activations;
+      resolved;
 
+    # `true` if we have any unsatisfied weak dep features ("getrandom?/std") and
+    # need to recurse.
     anyUnsatDeferred =
       builtins.any
       (byFeatFor:
@@ -243,12 +281,48 @@
         (unsat: builtins.length unsat > 0)
         (builtins.attrValues byFeatFor))
       (builtins.attrValues unsatDeferred);
+
+    # If we have to recurse, we'll mark all satisfied activations as `done` so
+    # we don't have re-resolve them.
+    nextStartSet =
+      builtins.map
+      (
+        op:
+        # # A previous recursion already activated this op
+          if op ? done
+          then op
+          # All new package activations are done.
+          else if builtins.length op.key == 2
+          then op // {done = true;}
+          else let
+            key = op.key;
+            pkgId = builtins.elemAt key 0;
+            featFor = builtins.elemAt key 1;
+            feat = builtins.elemAt key 2;
+            parsedFeat = _parseFeature feat;
+            isWeakDepFeature = parsedFeat.type == "depFeature" && parsedFeat.weak;
+            isUnsat = builtins.elem parsedFeat unsatDeferred.${pkgId}.${featFor};
+          in
+            if isWeakDepFeature && isUnsat
+            then op
+            else op // {done = true;}
+      )
+      activationsList;
+
+    # Sort all the unsatisfied activations last, so the `genericClosure`'s
+    # internal hashmap fills up with all the `done = true` ops first.
+    nextStartSetSorted = builtins.sort (op1: op2: !(op1 ? done) -> !(op2 ? done)) nextStartSet;
   in
+    # nextStartSetSorted;
+    # nextStartSet;
     # activationsList;
-    # TODO(phlip9): recurse if anyUnsatDeferred
-    if anyUnsatDeferred
-    then builtins.trace "WARN: unsatisfied deferred weak dependencies!" activations
-    else activations;
+    # unsatDeferred;
+    # resolved;
+    if iter == 10
+    then builtins.throw "resolveFeatures: recursion limit reached, too many layers of weak dep features?"
+    else if anyUnsatDeferred
+    then _resolveFeaturesRec (ctx // {prevResolved = resolved;}) (iter + 1) nextStartSetSorted
+    else resolved;
 
   # Activate a package with id `pkgId` for resovler target `featFor`.
   # This fn gets called _exactly once_ per `(pkgId, featFor)`.
@@ -278,7 +352,6 @@
     (ctx.pkgs.${pkgId}.features.${feat});
 
   # activate an optional dep feature (ex: "dep:serde_derive")
-  # TODO(phlip9): somehow handle weak dep feature upon activation
   _activateFvDep = ctx: pkgId: featFor: depName:
     builtins.concatMap
     _activateFilteredPkgDepFeatures
@@ -291,9 +364,17 @@
 
   # Activate a transitive dep feature (ex: "serde/std", "quote?/proc-macro")
   # NOTE: Currently we ignore all weak dep features
-  # TODO(phlip9): produce weak dep feature correctly
   _activateFvDepFeature = ctx: pkgId: featFor: parsedFeat:
-    if parsedFeat.weak
+  # # We can't activate a weak dep feature here if:
+  # # 1. (early exit) this is our first iteration and so we don't know of any
+  # #    activated optional deps.
+  # # 2. or we have a previous `resolved` but the dep is _still_ not activated.
+    if
+      parsedFeat.weak
+      && (
+        (ctx.prevResolved == null)
+        || !(ctx.prevResolved.${pkgId}.${featFor}.deps ? ${parsedFeat.depName})
+      )
     then []
     else
       builtins.concatMap
@@ -309,7 +390,6 @@
             # If the dep is optional, either enable that dep (if not weak) or if
             # weak, note it down to activate the feature if/when that dep is enabled
             # later on.
-            # TODO(phlip9): actually handle weak
             if depPkgDepKind.optional or false
             then
               (
@@ -431,7 +511,7 @@
       (targetCfg.parseTargetCfgExpr pkgDepKind.target);
 
   # Build the initial set of workspace packages and features to activate.
-  _mkStartSet = ctx: rootPkgIds: rootFeatures: let
+  _mkInitialStartSet = ctx: rootPkgIds: rootFeatures: let
     # The initially selected set of workspace packages to activate.
     startSetWithoutFeatures =
       builtins.concatMap (
