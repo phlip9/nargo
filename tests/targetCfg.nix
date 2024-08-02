@@ -122,6 +122,28 @@ in {
     not2 = test ''cfg(not(wtf))'' true;
   };
 
+  cfg-eval-smoketests = {assertEq, ...}: let
+    targets = ["x86_64-unknown-linux-gnu" "aarch64-apple-darwin"];
+    cfgs = builtins.listToAttrs (map (target: {
+        name = target;
+        value = targetCfg.platformToCfgs (lib.systems.elaborate target);
+      })
+      targets);
+    test = target: cfg: expect: assertEq (targetCfg.evalTargetCfgStr cfgs.${target} cfg) expect;
+  in {
+    windows1 = test "x86_64-unknown-linux-gnu" "cfg(windows)" false;
+    windows2 = test "aarch64-apple-darwin" "cfg(windows)" false;
+
+    notWindows1 = test "x86_64-unknown-linux-gnu" "cfg(not(windows))" true;
+    notWindows2 = test "aarch64-apple-darwin" "cfg(not(windows))" true;
+
+    unix1 = test "x86_64-unknown-linux-gnu" "cfg(unix)" true;
+    unix2 = test "aarch64-apple-darwin" "cfg(unix)" true;
+
+    notUnix1 = test "x86_64-unknown-linux-gnu" "cfg(not(unix))" false;
+    notUnix2 = test "aarch64-apple-darwin" "cfg(not(unix))" false;
+  };
+
   platform-cfg-tests = {assertEq, ...}: let
     inherit (lib.systems) elaborate;
     test = config: expect: let

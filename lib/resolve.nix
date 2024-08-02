@@ -4,10 +4,7 @@
 {
   lib,
   targetCfg,
-}: let
-  inherit (lib) systems;
-  # inherit (builtins) elemAt head length fromJSON readFile;
-in rec {
+}: rec {
   # From the full, locked package set in `Cargo.metadata.json` and a concrete
   # build instance (workspace packages, workspace targets, target platform,
   # features), this function resolves the features and optional dependencies
@@ -41,7 +38,7 @@ in rec {
     # deps are cfg'd based on this platform.
     #
     # Typically `stdenv.buildPlatform`.
-    buildPlatform ? systems.elaborate buildTarget,
+    buildPlatform ? lib.systems.elaborate buildTarget,
     # The runtime/host platform, as a rust target triple.
     # Ex: "x86_64-unknown-linux-gnu", "aarch64-linux-android"
     hostTarget,
@@ -53,7 +50,7 @@ in rec {
     #
     # Typically `stdenv.hostPlatform`.
     # TODO(phlip9): support multiple target platforms
-    hostPlatform ? systems.elaborate hostTarget,
+    hostPlatform ? lib.systems.elaborate hostTarget,
   }: let
     # Immutable context needed for feature resolution.
     ctx = {
@@ -427,11 +424,11 @@ in rec {
     else
       # Evaluate the `cfg(...)` expr against the target platform for this pkgDep.
       targetCfg.evalCfgExpr (
-        if featFor == "build" || (pkgDepKind.kind or null) == "build"
+        if ((featFor == "build") || ((pkgDepKind.kind or null) == "build"))
         then ctx.buildCfgs
         else ctx.hostCfgs
       )
-      pkgDepKind.target;
+      (targetCfg.parseTargetCfgExpr pkgDepKind.target);
 
   # Build the initial set of workspace packages and features to activate.
   _mkStartSet = ctx: rootPkgIds: rootFeatures: let
