@@ -141,11 +141,11 @@ in {
   fd = mkNixpkgsExample pkgs.fd;
   gitoxide = mkNixpkgsExample pkgs.gitoxide;
   hickory-dns = mkNixpkgsExample pkgs.trust-dns;
+  nushell = mkNixpkgsExample pkgs.nushell;
   rage = mkNixpkgsExample pkgs.rage;
   ripgrep = mkNixpkgsExample pkgs.ripgrep;
   starlark-rust = mkNixpkgsExample pkgs.starlark-rust;
-  # # TODO(phlip9): fix
-  # wasmtime = mkNixpkgsExample pkgs.wasmtime;
+  wasmtime = mkNixpkgsExample pkgs.wasmtime;
 
   #
   # Github example crates

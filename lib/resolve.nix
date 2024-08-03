@@ -373,7 +373,7 @@
       parsedFeat.weak
       && (
         (ctx.prevResolved == null)
-        || !(ctx.prevResolved.${pkgId}.${featFor}.deps ? ${parsedFeat.depName})
+        || !(lib.hasAttrByPath [pkgId featFor "deps" parsedFeat.depName] ctx.prevResolved)
       )
     then []
     else
