@@ -27,13 +27,8 @@ pub type ByFeatFor<'a> = BTreeMap<FeatFor, PkgFeatForActivation<'a>>;
 pub struct PkgFeatForActivation<'a> {
     #[serde(borrow)]
     pub feats: BTreeMap<&'a str, ()>,
-    //
-    // // TODO
     // #[serde(borrow)]
     // pub deps: BTreeMap<&'a str, ()>,
-    //
-    // // TODO
-    // pub deferred: serde::de::IgnoredAny,
 }
 
 // --- impl PkgId --- //

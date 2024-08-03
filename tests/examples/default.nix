@@ -9,10 +9,9 @@
 
   mkExample = {
     name,
-    src,
-  }: let
-    srcCleaned = craneLib.cleanCargoSource src;
-  in rec {
+    src ? builtins.throw "Must specify `src` or `srcCleaned`",
+    srcCleaned ? craneLib.cleanCargoSource src,
+  }: rec {
     src = srcCleaned;
     cargoVendorDir = craneLib.vendorCargoDeps {src = srcCleaned;};
 
@@ -99,6 +98,13 @@
       name = baseNameOf src;
     };
 
+  mkNixpkgsExample = pkg:
+    mkExample {
+      name = pkg.name;
+      # nixpkgs rust packages are already cleaned
+      srcCleaned = pkg.src;
+    };
+
   nocargoSrc = pkgs.fetchFromGitHub {
     owner = "oxalica";
     repo = "nocargo";
@@ -128,23 +134,22 @@ in {
   pkg-targets = mkLocalExample ./pkg-targets;
 
   #
-  # External crates
+  # nixpkgs rust packages
   #
 
-  # non-trivial binary crate (not workspace)
-  fd = mkExample {inherit (pkgs.fd) name src;};
+  cargo-hack = mkNixpkgsExample pkgs.cargo-hack;
+  fd = mkNixpkgsExample pkgs.fd;
+  gitoxide = mkNixpkgsExample pkgs.gitoxide;
+  hickory-dns = mkNixpkgsExample pkgs.trust-dns;
+  rage = mkNixpkgsExample pkgs.rage;
+  ripgrep = mkNixpkgsExample pkgs.ripgrep;
+  starlark-rust = mkNixpkgsExample pkgs.starlark-rust;
+  # # TODO(phlip9): fix
+  # wasmtime = mkNixpkgsExample pkgs.wasmtime;
 
-  # non-trivial binary crate (workspace)
-  rage = mkExample {inherit (pkgs.rage) name src;};
-
-  # non-trivial binary crate (workspace)
-  ripgrep = mkExample {inherit (pkgs.ripgrep) name src;};
-
-  # non-trivial
-  hickory-dns = mkExample {inherit (pkgs.trust-dns) name src;};
-
-  # small crate
-  cargo-hack = mkExample {inherit (pkgs.cargo-hack) name src;};
+  #
+  # Github example crates
+  #
 
   # non-trivial library (workspace)
   rand = mkExample {

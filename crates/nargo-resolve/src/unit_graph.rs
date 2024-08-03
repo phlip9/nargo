@@ -133,8 +133,7 @@ our feature resolution type from the cargo unit-graph:
 
             let activation = resolve::PkgFeatForActivation {
                 feats,
-                // deps: BTreeMap::new(), // TODO,
-                // deferred: serde::de::IgnoredAny,
+                // deps: BTreeMap::new(),
             };
 
             // Insert the activation. There might be multiple activations for
