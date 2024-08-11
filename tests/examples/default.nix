@@ -75,17 +75,11 @@
         (
           set -x;
 
-          if ! nargo-resolve \
+          nargo-resolve \
             --unit-graph "$cargoUnitGraph" \
             --resolve-features "$resolveFeaturesJsonPath" \
             --host-target "$hostTarget" \
-            --workspace-root "$cargoSrc" \
-            2>&1 | tee "$out/nargo-resolve.log" \
-          ; then
-            cp "$resolveFeaturesJsonPath" "$out/nargo-resolve-features.json"
-            ln -s "$cargoUnitGraph" "$out/cargo-unit-graph.json"
-            exit 0
-          fi
+            --workspace-root "$cargoSrc"
 
           set +x;
         )
