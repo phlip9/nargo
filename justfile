@@ -10,13 +10,18 @@ nargo-resolve-workspace:
         --host-target x86_64-unknown-linux-gnu \
         --workspace-root $(pwd)
 
-# Build cargo --unit-graph on local workspace
+resolve-features:
+    nix eval --json .#packages.x86_64-linux.nargo-metadata.resolve
+
+# Emit `cargo build --unit-graph` for local workspace
 cargo-unit-graph:
     cargo build --frozen --unit-graph --target=x86_64-unknown-linux-gnu \
         -Z unstable-options
 
-resolve-features:
-    nix eval --json .#packages.x86_64-linux.nargo-metadata.resolve
+# Emit `cargo build --build-plan` for local workspace
+cargo-build-plan:
+    cargo build --release --frozen --build-plan --target=x86_64-unknown-linux-gnu \
+        -Z unstable-options
 
 # Generate Cargo.metadata.json file
 cargo-metadata-json:

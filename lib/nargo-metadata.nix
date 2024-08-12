@@ -8,6 +8,7 @@
   generateCargoMetadata,
   lib,
   resolve,
+  build,
   nargoVendoredCargoDeps,
 }:
 craneLib.buildPackage {
@@ -35,8 +36,8 @@ craneLib.buildPackage {
   doInstallCargoArtifacts = false;
   strictDeps = true;
 
-  passthru = {
-    metadata = generateCargoMetadata {
+  passthru = rec {
+    metadataDrv = generateCargoMetadata {
       name = "nargo-metadata";
       # TODO(phlip9): replace this
       src = lib.fileset.toSource {
@@ -53,8 +54,17 @@ craneLib.buildPackage {
       cargoVendorDir = nargoVendoredCargoDeps;
     };
 
-    resolve = resolve.resolveFeatures {
-      metadata = builtins.fromJSON (builtins.readFile ../Cargo.metadata.json);
+    metadata = builtins.fromJSON (builtins.readFile ../Cargo.metadata.json);
+
+    resolved = resolve.resolveFeatures {
+      metadata = metadata;
+      buildTarget = "x86_64-unknown-linux-gnu";
+      hostTarget = "x86_64-unknown-linux-gnu";
+    };
+
+    built = build.build {
+      metadata = metadata;
+      resolved = resolved;
       buildTarget = "x86_64-unknown-linux-gnu";
       hostTarget = "x86_64-unknown-linux-gnu";
     };

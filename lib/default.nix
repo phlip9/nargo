@@ -30,6 +30,13 @@ lib.makeScope pkgs.newScope (self: {
     targetCfg = self.targetCfg;
   };
 
+  # `cargo build`, implemented in nix.
+  build = import ./build.nix {
+    inherit lib;
+    resolve = self.resolve;
+    targetCfg = self.targetCfg;
+  };
+
   # Rust `cfg(...)` expression parser and evaluator.
   targetCfg = import ./targetCfg.nix {inherit lib;};
 })

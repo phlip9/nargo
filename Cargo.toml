@@ -29,6 +29,7 @@ panic = "abort"
 # lto = "thin"
 # codegen-units = 1
 # strip = true
+# incremental = false
 
 [profile.dev]
 panic = "abort"
