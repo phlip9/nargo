@@ -49,13 +49,13 @@ impl Args {
     pub fn run(self) {
         let unit_graph_buf = time!(
             "read --unit-graph",
-            fs::read_file(&self.unit_graph)
-                .expect("Failed to read `--unit-graph`"),
+            fs::read_existing_file(&self.unit_graph)
+                .expect("Failed to read `--unit-graph`")
         );
 
         let resolve_features_buf = time!(
             "read --resolve-features",
-            fs::read_file(&self.resolve_features)
+            fs::read_existing_file(&self.resolve_features)
                 .expect("Failed to read `--resolve-features`"),
         );
 

@@ -31,6 +31,9 @@ pub struct Package<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Source<'a>>,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hash: Option<SriHash<'a>>,
+
     pub edition: &'a str,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -110,6 +113,9 @@ pub struct ManifestTarget<'a> {
     pub edition: &'a str,
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct SriHash<'a>(pub &'a str);
+
 //
 // --- impl Metadata ---
 //
@@ -121,17 +127,27 @@ impl<'a> Metadata<'a> {
         workspace_members: Vec<PkgId<'a>>,
         workspace_default_members: Vec<PkgId<'a>>,
         resolve: input::Resolve<'a>,
+        current_metadata: Option<&'a Metadata<'a>>,
     ) -> Self {
         let mut deps_arena: Vec<&'a input::ManifestDependency<'a>> =
             Vec::with_capacity(8);
+
+        let curr_pkgs = current_metadata.map(|o| &o.packages);
 
         let packages: BTreeMap<PkgId<'_>, Package<'_>> = resolve
             .nodes
             .into_iter()
             .map(|node| {
                 let id = node.id;
-                let pkg =
-                    Package::from_input(ctx, &mut deps_arena, node, manifests);
+                let curr_pkg =
+                    curr_pkgs.and_then(|curr_pkgs| curr_pkgs.get(&id));
+                let pkg = Package::from_input(
+                    ctx,
+                    &mut deps_arena,
+                    node,
+                    manifests,
+                    curr_pkg,
+                );
                 (id, pkg)
             })
             .collect();
@@ -166,9 +182,31 @@ impl<'a> Package<'a> {
         deps_arena: &mut Vec<&'a input::ManifestDependency<'a>>,
         node: input::Node<'a>,
         manifests: &'a Manifests<'a>,
+        // The same package from the existing Cargo.metadata.json, if it exists.
+        curr_pkg: Option<&'a Package<'a>>,
     ) -> Self {
         let id = node.id;
         let manifest = &manifests[&id];
+
+        let name = manifest.name;
+        let version = manifest.version.clone();
+        let source = manifest.source;
+
+        // Try to get the crate hash from the current Cargo.metadata.json, if
+        // this is a crates.io dep.
+        //
+        // This lets us mostly avoid prefetching unless the actual Cargo.lock
+        // deps change.
+        let hash = source.filter(Source::is_crates_io).and(curr_pkg).and_then(
+            |curr_pkg| {
+                // Sanity check
+                assert_eq!(name, curr_pkg.name);
+                assert_eq!(version, curr_pkg.version);
+                assert_eq!(source, curr_pkg.source);
+
+                curr_pkg.hash
+            },
+        );
 
         let targets: Vec<ManifestTarget<'_>> = manifest
             .targets
@@ -188,8 +226,9 @@ impl<'a> Package<'a> {
             .collect();
 
         Self {
-            name: manifest.name,
-            version: manifest.version.clone(),
+            name,
+            version,
+            hash,
             source: manifest.source,
             edition: manifest.edition,
             rust_version: manifest.rust_version,

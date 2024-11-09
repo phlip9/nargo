@@ -268,12 +268,18 @@ impl<'a> fmt::Display for PkgId<'a> {
 //
 
 impl<'a> Source<'a> {
+    pub const CRATES_IO: Self = Self("crates.io");
+
     pub fn strip_locked(&self) -> Self {
         let s = self.0;
         match s.split_once('#') {
             Some((first, _rest)) => Self(first),
             None => Self(s),
         }
+    }
+
+    pub fn is_crates_io(&self) -> bool {
+        self == &Self::CRATES_IO
     }
 }
 

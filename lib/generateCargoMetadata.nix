@@ -66,7 +66,9 @@ in
     set -x
 
     # Generate the `Cargo.metadata.json` file.
-    nargo-metadata --metadata "$raw/Cargo.metadata.raw.json" > $out/Cargo.metadata.json
+    nargo-metadata \
+      --input-raw-metadata "$raw/Cargo.metadata.raw.json" \
+      --output-metadata "$out/Cargo.metadata.json"
 
     set +x
   ''

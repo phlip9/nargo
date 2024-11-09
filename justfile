@@ -26,8 +26,8 @@ cargo-build-plan:
 # Generate Cargo.metadata.json file
 cargo-metadata-json:
     cargo metadata --format-version=1 --all-features \
-        | cargo run -p nargo-metadata \
-        > Cargo.metadata.json
+        | cargo run -p nargo-metadata -- \
+            --output-metadata Cargo.metadata.json
 
 clean-cargo-metadata pkg:
     jq --sort-keys -L ./tests/crater/jq-lib '\

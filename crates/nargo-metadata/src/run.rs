@@ -1,9 +1,6 @@
-use std::{
-    collections::BTreeMap,
-    io::{self, Write},
-};
+use std::{collections::BTreeMap, path::Path};
 
-use nargo_core::time;
+use nargo_core::{fs, time};
 
 use crate::{
     clean,
@@ -11,12 +8,27 @@ use crate::{
     output,
 };
 
-pub fn run(input_bytes: &[u8]) {
+pub fn run(
+    input_raw_metadata_bytes: &[u8],
+    input_current_metadata_bytes: Option<&[u8]>,
+    output_metadata: Option<&Path>,
+    _nix_prefetch: bool,
+) {
     let mut input: input::Metadata<'_> = time!(
-        "deserialize input",
-        serde_json::from_slice(input_bytes)
+        "deserialize `cargo metadata` output",
+        serde_json::from_slice(input_raw_metadata_bytes)
             .expect("Failed to deserialize cargo metadata output")
     );
+
+    let input_current_metadata: Option<output::Metadata<'_>> =
+        input_current_metadata_bytes.map(|bytes| {
+            time!(
+                "deserialize current Cargo.metadata.json",
+                serde_json::from_slice(bytes).expect(
+                    "Failed to deserialize current Cargo.metadata.json"
+                ),
+            )
+        });
 
     let before_num_pkgs = input.resolve.nodes.len();
 
@@ -38,7 +50,8 @@ pub fn run(input_bytes: &[u8]) {
             input.workspace_members,
             input.workspace_default_members,
             input.resolve,
-        )
+            input_current_metadata.as_ref(),
+        ),
     );
 
     let after_num_pkgs = output.packages.len();
@@ -46,9 +59,9 @@ pub fn run(input_bytes: &[u8]) {
 
     let buf = time!("serialize output", output.serialize_pretty());
 
-    time!("write output", {
-        let mut stdout = io::stdout().lock();
-        stdout.write_all(&buf).expect("Failed to write output json");
-        stdout.flush().expect("Failed to flush stdout");
-    });
+    time!(
+        "write output",
+        fs::write_file_or_stdout(output_metadata, &buf)
+            .expect("Failed to write output")
+    );
 }

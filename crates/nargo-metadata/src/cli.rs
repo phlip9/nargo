@@ -1,4 +1,7 @@
-use std::{ffi::OsStr, path::PathBuf};
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
 
 use nargo_core::{fs, time};
 
@@ -6,18 +9,35 @@ const HELP: &str = r#"
 nargo-metadata
 
 USAGE:
-  nargo-metadata [--metadata METADATA]
+  nargo-metadata [OPTIONS]
 
 FLAGS:
-  -h, --help            Prints help information
+  -h, --help
+      Prints help information
 
 OPTIONS:
-  --metadata METADATA   Path to raw cargo-metadata json output. If left unset
-                        or set to "-", then this is read from stdin.
+  --input-raw-metadata PATH
+      Path to the raw `cargo metadata` json output. If left unset or set to "-",
+      then this is read from stdin.
+
+  --input-current-metadata PATH
+      Path to the current `Cargo.metadata.json`, if it exists. If left unset,
+      then we'll try to read it from the current directory.
+
+  --output-metadata PATH
+      Path to output the new `Cargo.metadata.json`. If set to "-", then this is
+      written to stdout.
+
+  --nix-prefetch
+      Prefetch and pin dependencies from crates.io using `nix store prefetch-file`.
+      Does not work inside the `nix build` sandbox.
 "#;
 
 pub struct Args {
-    metadata: Option<PathBuf>,
+    input_raw_metadata: Option<PathBuf>,
+    input_current_metadata: Option<PathBuf>,
+    output_metadata: Option<PathBuf>,
+    nix_prefetch: bool,
 }
 
 impl Args {
@@ -30,20 +50,46 @@ impl Args {
         }
 
         let args = Args {
-            metadata: pargs.opt_value_from_os_str("--metadata", parse_path)?,
+            input_raw_metadata: pargs
+                .opt_value_from_os_str("--input-raw-metadata", parse_path)?,
+            input_current_metadata: pargs.opt_value_from_os_str(
+                "--input-current-metadata",
+                parse_path,
+            )?,
+            output_metadata: pargs
+                .opt_value_from_os_str("--output-metadata", parse_path)?,
+            nix_prefetch: pargs.contains("--nix-prefetch"),
         };
 
         Ok(args)
     }
 
     pub fn run(self) {
-        let buf = time!(
-            "read input",
-            fs::read_file_or_stdin(self.metadata.as_deref())
-                .expect("Failed to read `cargo metadata`")
+        let input_raw_metadata_bytes = time!(
+            "read `cargo metadata` output",
+            fs::read_file_or_stdin(self.input_raw_metadata.as_deref())
+                .expect("Failed to read `cargo metadata` output")
         );
 
-        time!("run", crate::run::run(buf.as_slice()));
+        let input_current_metadata = self
+            .input_current_metadata
+            .as_deref()
+            .unwrap_or(Path::new("Cargo.metadata.json"));
+        let input_current_metadata_bytes = time!(
+            "read current Cargo.metadata.json",
+            fs::read_file(input_current_metadata)
+                .expect("Failed to read current `Cargo.metadata.json`")
+        );
+
+        time!(
+            "run",
+            crate::run::run(
+                input_raw_metadata_bytes.as_slice(),
+                input_current_metadata_bytes.as_deref(),
+                self.output_metadata.as_deref(),
+                self.nix_prefetch,
+            ),
+        );
     }
 }
 
