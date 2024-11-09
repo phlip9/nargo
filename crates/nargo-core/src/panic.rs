@@ -1,6 +1,6 @@
 use std::{
     io::{self, Write},
-    panic::{Location, PanicInfo},
+    panic::{Location, PanicHookInfo},
 };
 
 /// Set a small custom panic hook that prints panics to `stderr` before calling
@@ -11,7 +11,7 @@ pub fn set_hook() {
     std::panic::set_hook(Box::new(nargo_panic_hook));
 }
 
-fn nargo_panic_hook(panic_info: &PanicInfo<'_>) {
+fn nargo_panic_hook(panic_info: &PanicHookInfo<'_>) {
     // Extract message and location from panic.
     let payload = panic_info.payload();
     let message: &str = if let Some(s) = payload.downcast_ref::<&str>() {

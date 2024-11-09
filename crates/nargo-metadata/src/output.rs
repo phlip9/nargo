@@ -1,7 +1,8 @@
-use std::collections::BTreeMap;
+use std::{borrow::Cow, collections::BTreeMap};
 
 use anyhow::Context as _;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::ser::{PrettyFormatter, Serializer};
 use serde_json::value::RawValue;
 
 use crate::{
@@ -11,8 +12,9 @@ use crate::{
 
 type Manifests<'a> = BTreeMap<PkgId<'a>, input::Manifest<'a>>;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Metadata<'a> {
+    #[serde(borrow)]
     pub packages: BTreeMap<PkgId<'a>, Package<'a>>,
     pub workspace_members: Vec<PkgId<'a>>,
     pub workspace_default_members: Vec<PkgId<'a>>,
@@ -20,12 +22,15 @@ pub struct Metadata<'a> {
 
 // TODO(phlip9): include extracted crate dir NAR hash so we can more
 // efficiently dl after locking.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Package<'a> {
     pub name: &'a str,
+
     pub version: semver::Version,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Source<'a>>,
+
     pub edition: &'a str,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -37,26 +42,29 @@ pub struct Package<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub links: Option<&'a str>,
 
+    #[serde(borrow)]
     #[serde(serialize_with = "compact::features")]
-    pub features: &'a BTreeMap<&'a str, Vec<&'a str>>,
+    pub features: Cow<'a, BTreeMap<&'a str, Vec<&'a str>>>,
 
     #[serde(serialize_with = "compact::deps")]
     pub deps: BTreeMap<PkgId<'a>, PkgDep<'a>>,
 
     // TODO(phlip9): add `proc_macro: bool` if any target is a proc-macro?
+    #[serde(borrow)]
     #[serde(serialize_with = "compact::targets")]
     pub targets: Vec<ManifestTarget<'a>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct PkgDep<'a> {
     pub name: &'a str,
 
+    #[serde(borrow)]
     #[serde(serialize_with = "compact::dep_kinds")]
     pub kinds: Vec<PkgDepKind<'a>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct PkgDepKind<'a> {
     #[serde(skip_serializing_if = "DepKind::is_normal")]
     pub kind: DepKind,
@@ -65,28 +73,36 @@ pub struct PkgDepKind<'a> {
     pub target: Option<Platform<'a>>,
 
     #[serde(skip_serializing_if = "bool::is_false")]
+    #[serde(default = "bool::default_false")]
     pub optional: bool,
 
     #[serde(skip_serializing_if = "bool::is_true")]
+    #[serde(default = "bool::default_true")]
     pub default: bool,
 
+    #[serde(borrow)]
     #[serde(skip_serializing_if = "slice::is_empty")]
-    pub features: &'a [&'a str],
+    #[serde(default)]
+    pub features: Cow<'a, [&'a str]>,
 }
 
-#[derive(Serialize)]
-pub struct Platform<'a>(pub &'a RawValue);
+#[derive(Serialize, Deserialize)]
+pub struct Platform<'a>(#[serde(borrow)] pub &'a RawValue);
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ManifestTarget<'a> {
     pub name: &'a str,
 
-    pub kind: &'a [&'a str],
+    #[serde(borrow)]
+    pub kind: Cow<'a, [&'a str]>,
 
-    pub crate_types: &'a [&'a str],
+    #[serde(borrow)]
+    pub crate_types: Cow<'a, [&'a str]>,
 
+    #[serde(borrow)]
     #[serde(skip_serializing_if = "slice::is_empty")]
-    pub required_features: &'a [&'a str],
+    #[serde(default)]
+    pub required_features: Cow<'a, [&'a str]>,
 
     pub path: &'a str,
 
@@ -126,6 +142,18 @@ impl<'a> Metadata<'a> {
             packages,
         }
     }
+
+    /// Like [`serde_json::to_vec_pretty`] but pre-allocates more space and uses
+    /// only one space per indent level, to reduce the size of the final file
+    /// while staying human-readable.
+    pub fn serialize_pretty(&self) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::with_capacity(32 << 10);
+        let formatter = PrettyFormatter::with_indent(b" ");
+        let mut serializer = Serializer::with_formatter(&mut buf, formatter);
+        self.serialize(&mut serializer)
+            .expect("Failed to serialize output json");
+        buf
+    }
 }
 
 //
@@ -162,12 +190,12 @@ impl<'a> Package<'a> {
         Self {
             name: manifest.name,
             version: manifest.version.clone(),
+            source: manifest.source,
             edition: manifest.edition,
             rust_version: manifest.rust_version,
-            source: manifest.source,
             default_run: manifest.default_run,
             links: manifest.links,
-            features: &manifest.features,
+            features: Cow::Borrowed(&manifest.features),
             deps,
             targets,
         }
@@ -342,7 +370,7 @@ impl<'a> PkgDepKind<'a> {
             target: target.map(Platform::from_input),
             optional: manifest_dep_entry.optional,
             default,
-            features: &manifest_dep_entry.features,
+            features: Cow::Borrowed(&manifest_dep_entry.features),
         }
     }
 }
@@ -355,9 +383,9 @@ impl<'a> ManifestTarget<'a> {
     fn from_input(target: &'a input::ManifestTarget<'a>) -> Self {
         Self {
             name: target.name,
-            kind: &target.kind,
-            crate_types: &target.crate_types,
-            required_features: &target.required_features,
+            kind: Cow::Borrowed(&target.kind),
+            crate_types: Cow::Borrowed(&target.crate_types),
+            required_features: Cow::Borrowed(&target.required_features),
             path: target.src_path,
             edition: target.edition,
         }
@@ -380,16 +408,26 @@ impl<'a> Platform<'a> {
 //
 
 // These trivial helper functions make `#[serde(skip_serializing_if = "...")]`
-// a little less painful.
+// and `#[serde(default = "...")]` a little less painful.
 
 mod bool {
     #[inline]
-    pub fn is_false(x: &bool) -> bool {
+    pub const fn default_false() -> bool {
+        false
+    }
+
+    #[inline]
+    pub const fn default_true() -> bool {
+        true
+    }
+
+    #[inline]
+    pub const fn is_false(x: &bool) -> bool {
         !*x
     }
 
     #[inline]
-    pub fn is_true(x: &bool) -> bool {
+    pub const fn is_true(x: &bool) -> bool {
         *x
     }
 }
@@ -508,5 +546,25 @@ mod dump {
             .collect::<Vec<_>>();
 
         serde_json::to_string_pretty(&deps).unwrap()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use std::fs;
+
+    #[test]
+    fn test_workspace_metadata_serde_roundtrip() {
+        let workspace_metadata_json_1 =
+            fs::read_to_string("../../Cargo.metadata.json").unwrap();
+        let workspace_metadata_1 =
+            serde_json::from_str::<Metadata<'_>>(&workspace_metadata_json_1)
+                .unwrap();
+        let workspace_metadata_json_2 =
+            String::from_utf8(workspace_metadata_1.serialize_pretty()).unwrap();
+
+        assert_eq!(workspace_metadata_json_1, workspace_metadata_json_2);
     }
 }

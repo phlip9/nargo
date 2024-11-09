@@ -44,18 +44,7 @@ pub fn run(input_bytes: &[u8]) {
     let after_num_pkgs = output.packages.len();
     assert_eq!(after_num_pkgs, before_num_pkgs);
 
-    let buf = time!("serialize output", {
-        use serde::ser::Serialize;
-        use serde_json::ser::{PrettyFormatter, Serializer};
-
-        let mut buf: Vec<u8> = Vec::with_capacity(32 << 10);
-        let formatter = PrettyFormatter::with_indent(b" ");
-        let mut serialier = Serializer::with_formatter(&mut buf, formatter);
-        output
-            .serialize(&mut serialier)
-            .expect("Failed to serialize output json");
-        buf
-    });
+    let buf = time!("serialize output", output.serialize_pretty());
 
     time!("write output", {
         let mut stdout = io::stdout().lock();

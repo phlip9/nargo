@@ -246,8 +246,9 @@ impl<'de> serde::Deserialize<'de> for DepKind {
             None => Ok(Self::Normal),
             Some("dev") => Ok(Self::Dev),
             Some("build") => Ok(Self::Build),
-            Some(var) =>
-                Err(serde::de::Error::unknown_variant(var, &["dev", "build"])),
+            Some(var) => {
+                Err(serde::de::Error::unknown_variant(var, &["dev", "build"]))
+            }
         }
     }
 }
