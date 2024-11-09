@@ -5,13 +5,14 @@
 # we'll want to switch over to our own builder when that exists.
 {
   craneLib,
+  generateCargoBuildPlan,
   generateCargoMetadata,
   lib,
   resolve,
   build,
   nargoVendoredCargoDeps,
 }:
-craneLib.buildPackage {
+craneLib.buildPackage rec {
   pname = "nargo-metadata";
   version = "0.1.0";
 
@@ -37,20 +38,17 @@ craneLib.buildPackage {
   strictDeps = true;
 
   passthru = rec {
+    build-plan = generateCargoBuildPlan {
+      name = pname;
+      src = src;
+      cargoVendorDir = nargoVendoredCargoDeps;
+      cargoExtraArgs = cargoExtraArgs;
+      hostTarget = "x86_64-unknown-linux-gnu";
+    };
+
     metadataDrv = generateCargoMetadata {
-      name = "nargo-metadata";
-      # TODO(phlip9): replace this
-      src = lib.fileset.toSource {
-        root = ../.;
-        fileset = lib.fileset.unions [
-          ../Cargo.toml
-          ../Cargo.lock
-          ../.cargo
-          ../crates/nargo-core/Cargo.toml
-          ../crates/nargo-metadata/Cargo.toml
-          ../crates/nargo-resolve/Cargo.toml
-        ];
-      };
+      name = pname;
+      src = src;
       cargoVendorDir = nargoVendoredCargoDeps;
     };
 
