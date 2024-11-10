@@ -1,11 +1,7 @@
 //! Prefetching and pinning crates from crates.io using `nix store prefetch-file`.
 
 use core::str;
-use std::{
-    borrow::Cow,
-    path::Path,
-    process::{self, Stdio},
-};
+use std::{borrow::Cow, cmp::min, path::Path, process, sync::Mutex, thread};
 
 use anyhow::{format_err, Context};
 use nargo_core::which::which;
@@ -20,23 +16,40 @@ pub fn prefetch(output: &mut output::Metadata<'_>) {
     let needs_prefetch = output
         .packages
         .iter_mut()
-        .filter(|(_pkg_id, pkg)| pkg.is_crates_io() && pkg.hash.is_none());
+        .filter(|(_pkg_id, pkg)| pkg.is_crates_io() && pkg.hash.is_none())
+        .collect::<Vec<_>>();
+
+    if needs_prefetch.is_empty() {
+        return;
+    }
 
     let nix = which("nix").expect("Couldn't find `nix` binary in `$PATH`");
 
-    // TODO(phlip9): concurrency
-    for (pkg_id, pkg) in needs_prefetch {
-        eprintln!("prefetch: {pkg_id}");
+    const MAX_THREADS: usize = 8;
+    let num_threads = min(needs_prefetch.len(), MAX_THREADS);
 
-        let out = nix_store_prefetch_file(&nix, pkg)
-            .with_context(|| pkg_id.to_string())
-            .expect("Failed to prefetch crate");
+    // download packages concurrently to speed up prefetching
+    let needs_prefetch = Mutex::new(needs_prefetch);
+    thread::scope(|s| {
+        for _ in 0..num_threads {
+            s.spawn(|| loop {
+                // Grab a package that we need to prefetch
+                let (pkg_id, pkg) = match needs_prefetch.lock().unwrap().pop() {
+                    Some(x) => x,
+                    None => return,
+                };
 
-        let hash = out.hash;
-        eprintln!("  -> \"{hash}\"");
+                let out = nix_store_prefetch_file(&nix, pkg)
+                    .with_context(|| pkg_id.to_string())
+                    .expect("Failed to prefetch crate");
 
-        pkg.hash = Some(output::SriHash(Cow::Owned(hash)));
-    }
+                let hash = out.hash;
+                eprintln!("prefetch: {pkg_id} -> \"{hash}\"");
+
+                pkg.hash = Some(output::SriHash(Cow::Owned(hash)));
+            });
+        }
+    });
 }
 
 /// Ask `nix` to prefetch a crate from crates.io, place it into the /nix/store,
@@ -55,8 +68,6 @@ fn nix_store_prefetch_file(
         .args(["--hash-type", "sha256"])
         .args(["--name", prefetch_name.as_str()])
         .arg(prefetch_url.as_str())
-        // TODO(phlip9): do something better
-        .stderr(Stdio::inherit())
         .output()
         .context("Failed to run `nix store prefetch-file`")?;
 
@@ -65,8 +76,9 @@ fn nix_store_prefetch_file(
 
     if !out.status.success() {
         let status = &out.status;
+        let stderr = String::from_utf8_lossy(&out.stderr);
         return Err(format_err!(
-            "`nix store prefetch-file` process errored: {status}, stdout:\n{stdout}"
+            "`nix store prefetch-file` process errored: {status}\n\nstdout:\n{stdout}\n\nstderr:\n{stderr}\n"
         ));
     }
 
