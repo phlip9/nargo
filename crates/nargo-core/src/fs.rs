@@ -68,7 +68,7 @@ pub fn write_file(path: &Path, buf: &[u8]) -> anyhow::Result<()> {
 pub fn write_stdout(buf: &[u8]) -> anyhow::Result<()> {
     let mut stdout = io::stdout().lock();
     stdout
-        .write_all(&buf)
+        .write_all(buf)
         .and_then(|_| stdout.flush())
         .context("<stdout>")
 }

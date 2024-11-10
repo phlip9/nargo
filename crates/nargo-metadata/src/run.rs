@@ -5,7 +5,7 @@ use nargo_core::{fs, time};
 use crate::{
     clean,
     input::{self, PkgId},
-    output,
+    output, prefetch,
 };
 
 pub fn run(
@@ -42,7 +42,7 @@ pub fn run(
         .map(|pkg| (pkg.id, pkg))
         .collect();
 
-    let output = time!(
+    let mut output = time!(
         "build output",
         output::Metadata::from_input(
             ctx,
@@ -56,6 +56,8 @@ pub fn run(
 
     let after_num_pkgs = output.packages.len();
     assert_eq!(after_num_pkgs, before_num_pkgs);
+
+    time!("prefetch", prefetch::prefetch(&mut output));
 
     let buf = time!("serialize output", output.serialize_pretty());
 

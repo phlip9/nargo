@@ -113,8 +113,8 @@ pub struct ManifestTarget<'a> {
     pub edition: &'a str,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
-pub struct SriHash<'a>(pub &'a str);
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct SriHash<'a>(#[serde(borrow)] pub Cow<'a, str>);
 
 //
 // --- impl Metadata ---
@@ -204,7 +204,7 @@ impl<'a> Package<'a> {
                 assert_eq!(version, curr_pkg.version);
                 assert_eq!(source, curr_pkg.source);
 
-                curr_pkg.hash
+                curr_pkg.hash.clone()
             },
         );
 
@@ -238,6 +238,25 @@ impl<'a> Package<'a> {
             deps,
             targets,
         }
+    }
+
+    /// Returns true if the package is a crates.io dependency.
+    pub(crate) fn is_crates_io(&self) -> bool {
+        self.source.filter(Source::is_crates_io).is_some()
+    }
+
+    /// The package name we'll use when prefetching into the nix store.
+    pub(crate) fn prefetch_name(&self) -> String {
+        let name = self.name;
+        let version = &self.version;
+        format!("crate-{name}-{version}")
+    }
+
+    /// The crates.io url we download this crate from.
+    pub(crate) fn prefetch_url(&self) -> String {
+        let name = self.name;
+        let version = &self.version;
+        format!("https://static.crates.io/crates/{name}/{version}/download")
     }
 }
 
