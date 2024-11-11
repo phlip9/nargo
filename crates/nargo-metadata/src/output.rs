@@ -246,6 +246,7 @@ impl<'a> Package<'a> {
     }
 
     /// The package name we'll use when prefetching into the nix store.
+    /// TODO(phlip9): point to nix prefetcher
     pub(crate) fn prefetch_name(&self) -> String {
         let name = self.name;
         let version = &self.version;
@@ -253,6 +254,7 @@ impl<'a> Package<'a> {
     }
 
     /// The crates.io url we download this crate from.
+    /// TODO(phlip9): point to nix prefetcher
     pub(crate) fn prefetch_url(&self) -> String {
         let name = self.name;
         let version = &self.version;

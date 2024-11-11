@@ -42,4 +42,23 @@ lib.makeScope pkgs.newScope (self: {
 
   # Rust `cfg(...)` expression parser and evaluator.
   targetCfg = import ./targetCfg.nix {inherit lib;};
+
+  # Vendor a single crates.io package from its Cargo.metadata.json definition.
+  vendorCargoDep = pkg: let
+    # Matches `nargo_metadata::output::Package::prefetch_name()`
+    name = "crate-${pkg.name}-${pkg.version}";
+    # Matches `nargo_metadata::output::Package::prefetch_url()`
+    url = "https://static.crates.io/crates/${pkg.name}/${pkg.version}/download";
+  in
+    # TODO(phlip9): first check that this is a crates.io package
+    pkgs.fetchzip {
+      name = name;
+      url = url;
+      hash = pkg.hash;
+      extension = "tar.gz";
+    };
+
+  # Vendor all crates.io packages from a Cargo.metadata.json
+  vendorCargoDeps = cargoMetadataJson:
+    builtins.mapAttrs (_pkgId: pkg: self.nargoVendorCargoDep pkg) cargoMetadataJson.packages;
 })
