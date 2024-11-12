@@ -19,7 +19,17 @@
       inherit cargoVendorDir name;
       src = srcCleaned;
     };
-    metadata = builtins.fromJSON (builtins.readFile (metadataDrv + "/Cargo.metadata.json"));
+    metadata = builtins.fromJSON (
+      # TODO(phlip9): unhack
+      # To reduce maintainence burden for all these example crates, I wanted to
+      # reuse the zero-config `craneLib.vendorCargoDeps` and so added the
+      # `--assume-vendored` flag. We effectively passthru each crate's store
+      # path into the Cargo.metadata.json; but when we IFD it here, nix complains
+      # that `fromJSON` is not allowed to refer to a store path.
+      builtins.unsafeDiscardStringContext (
+        builtins.readFile (metadataDrv + "/Cargo.metadata.json")
+      )
+    );
 
     buildTarget = pkgs.buildPlatform.rust.rustcTarget;
     hostTarget = "x86_64-unknown-linux-gnu";

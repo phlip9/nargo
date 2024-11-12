@@ -54,6 +54,7 @@ in
     depsBuildBuild = [nargo-metadata];
     env = {
       raw = raw;
+      cargoVendorDir = cargoVendorDir;
     };
   } ''
     mkdir $out
@@ -68,7 +69,8 @@ in
     # Generate the `Cargo.metadata.json` file.
     nargo-metadata \
       --input-raw-metadata "$raw/Cargo.metadata.raw.json" \
-      --output-metadata "$out/Cargo.metadata.json"
+      --output-metadata "$out/Cargo.metadata.json" \
+      --assume-vendored
 
     set +x
   ''

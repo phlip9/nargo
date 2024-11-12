@@ -6,7 +6,8 @@ just-fmt:
 cargo-metadata-json:
     cargo metadata --format-version=1 --all-features \
         | cargo run -p nargo-metadata -- \
-            --output-metadata Cargo.metadata.json
+            --output-metadata Cargo.metadata.json \
+            --nix-prefetch
 
 smoketest-pkg pkg:
     nix build -L --show-trace \
