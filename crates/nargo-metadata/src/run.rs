@@ -8,20 +8,23 @@ use crate::{
     output, prefetch,
 };
 
-pub fn run(
-    input_raw_metadata_bytes: &[u8],
-    input_current_metadata_bytes: Option<&[u8]>,
-    output_metadata: Option<&Path>,
-    _nix_prefetch: bool,
-) {
+pub(crate) struct Args<'a> {
+    pub input_raw_metadata_bytes: &'a [u8],
+    pub input_current_metadata_bytes: Option<&'a [u8]>,
+    pub output_metadata: Option<&'a Path>,
+    pub nix_prefetch: bool,
+    pub assume_vendored: bool,
+}
+
+pub fn run(args: Args<'_>) {
     let mut input: input::Metadata<'_> = time!(
         "deserialize `cargo metadata` output",
-        serde_json::from_slice(input_raw_metadata_bytes)
+        serde_json::from_slice(args.input_raw_metadata_bytes)
             .expect("Failed to deserialize cargo metadata output")
     );
 
     let input_current_metadata: Option<output::Metadata<'_>> =
-        input_current_metadata_bytes.map(|bytes| {
+        args.input_current_metadata_bytes.map(|bytes| {
             time!(
                 "deserialize current Cargo.metadata.json",
                 serde_json::from_slice(bytes).expect(
@@ -51,19 +54,22 @@ pub fn run(
             input.workspace_default_members,
             input.resolve,
             input_current_metadata.as_ref(),
+            args.assume_vendored,
         ),
     );
 
     let after_num_pkgs = output.packages.len();
     assert_eq!(after_num_pkgs, before_num_pkgs);
 
-    time!("prefetch", prefetch::prefetch(&mut output));
+    if args.nix_prefetch {
+        time!("prefetch", prefetch::prefetch(&mut output));
+    }
 
     let buf = time!("serialize output", output.serialize_pretty());
 
     time!(
         "write output",
-        fs::write_file_or_stdout(output_metadata, &buf)
+        fs::write_file_or_stdout(args.output_metadata, &buf)
             .expect("Failed to write output")
     );
 }

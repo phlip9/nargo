@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::{borrow::Cow, collections::BTreeMap};
 
 use anyhow::Context as _;
@@ -33,6 +34,10 @@ pub struct Package<'a> {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<SriHash<'a>>,
+
+    #[serde(borrow)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<Cow<'a, Path>>,
 
     pub edition: &'a str,
 
@@ -128,6 +133,7 @@ impl<'a> Metadata<'a> {
         workspace_default_members: Vec<PkgId<'a>>,
         resolve: input::Resolve<'a>,
         current_metadata: Option<&'a Metadata<'a>>,
+        assume_vendored: bool,
     ) -> Self {
         let mut deps_arena: Vec<&'a input::ManifestDependency<'a>> =
             Vec::with_capacity(8);
@@ -147,6 +153,7 @@ impl<'a> Metadata<'a> {
                     node,
                     manifests,
                     curr_pkg,
+                    assume_vendored,
                 );
                 (id, pkg)
             })
@@ -184,6 +191,7 @@ impl<'a> Package<'a> {
         manifests: &'a Manifests<'a>,
         // The same package from the existing Cargo.metadata.json, if it exists.
         curr_pkg: Option<&'a Package<'a>>,
+        assume_vendored: bool,
     ) -> Self {
         let id = node.id;
         let manifest = &manifests[&id];
@@ -208,6 +216,36 @@ impl<'a> Package<'a> {
             },
         );
 
+        // When building the Cargo.metadata.json inside the `nix build` sandbox,
+        // we have to assume the non-workspace crates are already vendored with
+        // `crane.vendorCargoDeps` (or similar). In this case, we try to reuse
+        // the already vendored crate path.
+        let is_workspace = source.is_none();
+        let path = if assume_vendored && !is_workspace {
+            let manifest_path = Path::new(manifest.manifest_path);
+            let crate_path = manifest_path
+                .parent()
+                .context("manifest_path is not a file")
+                .and_then(|crate_path| {
+                    // Canonicalize the path so we get the original /nix/store
+                    // path.
+                    crate_path
+                        .canonicalize()
+                        .context("Could not canonicalize crate_path")
+                })
+                .with_context(|| {
+                    format!(
+                        "crate: {name}@{version}, manifest_path: '{}'",
+                        manifest_path.display()
+                    )
+                })
+                .unwrap();
+
+            Some(Cow::Owned(crate_path))
+        } else {
+            None
+        };
+
         let targets: Vec<ManifestTarget<'_>> = manifest
             .targets
             .iter()
@@ -229,6 +267,7 @@ impl<'a> Package<'a> {
             name,
             version,
             hash,
+            path,
             source: manifest.source,
             edition: manifest.edition,
             rust_version: manifest.rust_version,

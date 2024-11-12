@@ -112,6 +112,7 @@ mod test {
             version: semver::Version::parse("1.0.81").unwrap(),
             source: Some(Source::CRATES_IO),
             hash: None,
+            path: None,
             edition: "2018",
 
             rust_version: None,

@@ -5,6 +5,8 @@ use std::{
 
 use nargo_core::{fs, time};
 
+use crate::run;
+
 const HELP: &str = r#"
 nargo-metadata
 
@@ -31,6 +33,13 @@ OPTIONS:
   --nix-prefetch
       Prefetch and pin dependencies from crates.io using `nix store prefetch-file`.
       Does not work inside the `nix build` sandbox.
+
+  --assume-vendored
+      Assume all external crate paths in the `--input-raw-metadata` are already
+      vendored in the /nix/store, so we can reuse them.
+
+      Typically used when run inside the `nix build` sandbox, where the crates
+      are already vendored using something like `crane.vendorCargoDeps`.
 "#;
 
 pub struct Args {
@@ -38,6 +47,7 @@ pub struct Args {
     input_current_metadata: Option<PathBuf>,
     output_metadata: Option<PathBuf>,
     nix_prefetch: bool,
+    assume_vendored: bool,
 }
 
 impl Args {
@@ -59,6 +69,7 @@ impl Args {
             output_metadata: pargs
                 .opt_value_from_os_str("--output-metadata", parse_path)?,
             nix_prefetch: pargs.contains("--nix-prefetch"),
+            assume_vendored: pargs.contains("--assume-vendored"),
         };
 
         Ok(args)
@@ -81,15 +92,16 @@ impl Args {
                 .expect("Failed to read current `Cargo.metadata.json`")
         );
 
-        time!(
-            "run",
-            crate::run::run(
-                input_raw_metadata_bytes.as_slice(),
-                input_current_metadata_bytes.as_deref(),
-                self.output_metadata.as_deref(),
-                self.nix_prefetch,
-            ),
-        );
+        let args = run::Args {
+            input_raw_metadata_bytes: input_raw_metadata_bytes.as_slice(),
+            input_current_metadata_bytes: input_current_metadata_bytes
+                .as_deref(),
+            output_metadata: self.output_metadata.as_deref(),
+            nix_prefetch: self.nix_prefetch,
+            assume_vendored: self.assume_vendored,
+        };
+
+        time!("run", run::run(args));
     }
 }
 
