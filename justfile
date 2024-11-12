@@ -2,6 +2,32 @@
 just-fmt:
     just --fmt --unstable
 
+# Generate Cargo.metadata.json file
+cargo-metadata-json:
+    cargo metadata --format-version=1 --all-features \
+        | cargo run -p nargo-metadata -- \
+            --output-metadata Cargo.metadata.json
+
+smoketest-pkg pkg:
+    nix build -L --show-trace \
+        .#tests.x86_64-linux.examples."{{ pkg }}".checkResolveFeatures
+
+smoketest-pkg-dbg pkg:
+    nix build -L --show-trace --debugger --impure --ignore-try \
+        .#tests.x86_64-linux.examples."{{ pkg }}".checkResolveFeatures
+
+smoketest:
+    just smoketest-pkg features
+    just smoketest-pkg workspace-inline
+    just smoketest-pkg pkg-targets
+    # just smoketest-pkg dependency-v3
+    just smoketest-pkg fd
+    just smoketest-pkg rage
+    just smoketest-pkg ripgrep
+    just smoketest-pkg hickory-dns
+    just smoketest-pkg cargo-hack
+    just smoketest-pkg rand
+
 # Run nargo-resolve test on local workspace
 nargo-resolve-workspace:
     cargo run -p nargo-resolve -- \
@@ -11,23 +37,29 @@ nargo-resolve-workspace:
         --workspace-root $(pwd)
 
 resolve-features:
-    nix eval --json .#packages.x86_64-linux.nargo-metadata.resolve
+    nix eval --json .#packages.x86_64-linux.nargo-metadata.resolved
 
 # Emit `cargo build --unit-graph` for local workspace
 cargo-unit-graph:
-    cargo build --frozen --unit-graph --target=x86_64-unknown-linux-gnu \
+    RUSTC_BOOTSTRAP=1 cargo build --unit-graph \
+        --target=x86_64-unknown-linux-gnu \
+        --frozen \
         -Z unstable-options
 
 # Emit `cargo build --build-plan` for local workspace
 cargo-build-plan:
-    cargo build --release --frozen --build-plan --target=x86_64-unknown-linux-gnu \
+    RUSTC_BOOTSTRAP=1 cargo build --build-plan \
+        --target=x86_64-unknown-linux-gnu \
+        --frozen \
+        --release \
         -Z unstable-options
 
-# Generate Cargo.metadata.json file
-cargo-metadata-json:
-    cargo metadata --format-version=1 --all-features \
-        | cargo run -p nargo-metadata -- \
-            --output-metadata Cargo.metadata.json
+cargo-metadata pkg:
+    nix build .#tests.x86_64-linux.examples."{{ pkg }}".metadata
+    cat ./result \
+        | jq -S . \
+        | tee /dev/stderr \
+        > "{{ pkg }}.cargo-metadata.json"
 
 clean-cargo-metadata pkg:
     jq --sort-keys -L ./tests/crater/jq-lib '\
@@ -45,63 +77,3 @@ diff-clean-metadata-manifests pkg:
     diff --unified=10 --color=always \
         <(just clean-cargo-metadata "{{ pkg }}") \
         <(just clean-workspace-manifests "{{ pkg }}")
-
-cargo-metadata pkg:
-    nix build .#crater.x86_64-linux."{{ pkg }}".metadata
-    cat ./result \
-        | jq -S . \
-        | tee /dev/stderr \
-        > "{{ pkg }}.cargo-metadata.json"
-
-workspace-manifests pkg:
-    nix eval --json --read-only --show-trace .#crater.x86_64-linux."{{ pkg }}".workspacePkgManifests \
-        | jq -S . \
-        | tee /dev/stderr \
-        > "{{ pkg }}.workspace-manifests.json"
-
-workspace-manifests-verbose pkg:
-    nix eval --json --read-only --show-trace --debug .#crater.x86_64-linux."{{ pkg }}".workspacePkgManifests \
-        2> /dev/stdout \
-        1> /dev/null
-
-workspace-manifests-dbg-copies pkg:
-    nix eval --json --read-only --show-trace --debug .#crater.x86_64-linux."{{ pkg }}".workspacePkgManifests \
-        2> /dev/stdout \
-        1> /dev/null \
-        | grep "copied"
-
-workspace-pkg-infos pkg:
-    nix eval --json --read-only --show-trace .#crater.x86_64-linux."{{ pkg }}".workspacePkgInfos \
-        | jq -S . \
-        | tee /dev/stderr \
-        > "{{ pkg }}.workspace-pkg-infos.json"
-
-workspace-pkg-infos2 pkg:
-    nix eval --json --read-only --show-trace .#crater.x86_64-linux."{{ pkg }}".workspacePkgInfos2 \
-        | jq -S . \
-        | tee /dev/stderr \
-        > "{{ pkg }}.workspace-pkg-infos2.json"
-
-smoketest-pkg pkg:
-    # nix build -L --show-trace .#crater.x86_64-linux."{{ pkg }}".diffPkgManifests
-    nix build -L --show-trace .#crater.x86_64-linux."{{ pkg }}".diffPkgInfos
-
-smoketest-pkg-dbg pkg:
-    nix build -L --show-trace --debugger --impure --ignore-try \
-        .#crater.x86_64-linux."{{ pkg }}".diffPkgManifests
-
-smoketest:
-    just smoketest-pkg features
-    just smoketest-pkg workspace-inline
-    just smoketest-pkg pkg-targets
-    # just smoketest-pkg dependency-v3
-    just smoketest-pkg fd
-    just smoketest-pkg rage
-    just smoketest-pkg ripgrep
-    just smoketest-pkg hickory-dns
-    just smoketest-pkg cargo-hack
-    just smoketest-pkg rand
-
-test:
-    nix eval --read-only --show-trace \
-        .#crater.x86_64-linux.tests

@@ -4,9 +4,7 @@
   nargoLib,
   pkgs,
   lib,
-}: let
-  inherit (pkgs.lib) mapAttrs';
-in rec {
+}: rec {
   examples = import ./examples {inherit craneLib inputs nargoLib pkgs;};
 
   resolve = import ./resolve.nix {inherit nargoLib;};
