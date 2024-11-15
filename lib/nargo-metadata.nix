@@ -11,6 +11,7 @@
   resolve,
   build,
   nargoVendoredCargoDeps,
+  pkgs,
 }:
 craneLib.buildPackage rec {
   pname = "nargo-metadata";
@@ -65,6 +66,8 @@ craneLib.buildPackage rec {
       resolved = resolved;
       buildTarget = "x86_64-unknown-linux-gnu";
       hostTarget = "x86_64-unknown-linux-gnu";
+      # TODO(phlip9): only works on ^^^
+      pkgsCross = pkgs;
     };
   };
 

@@ -38,6 +38,12 @@ lib.makeScope pkgs.newScope (self: {
     inherit lib;
     resolve = self.resolve;
     targetCfg = self.targetCfg;
+    buildLibCrate = self.buildLibCrate;
+  };
+
+  # `rustc` compile a single crate lib
+  buildLibCrate = import ./buildLibCrate.nix {
+    vendorCargoDep = self.vendorCargoDep;
   };
 
   # Rust `cfg(...)` expression parser and evaluator.

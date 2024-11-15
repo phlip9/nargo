@@ -2,6 +2,7 @@
   lib,
   resolve,
   targetCfg,
+  buildLibCrate,
 }: rec {
   build = {
     # JSON-deserialized `Cargo.metadata.json`
@@ -23,8 +24,13 @@
     hostPlatform ? lib.systems.elaborate hostTarget,
     # TODO(phlip9): target selection
     rootPkgIds ? metadata.workspace_default_members,
+    # A nixpkgs instance where
+    # `pkgsBuildBuild` is for `buildPlatform` and
+    # `pkgsBuildTarget` is for `hostPlatform`
+    pkgsCross,
   }: let
     metadataPkgs = metadata.packages;
+
     buildCfgs = targetCfg.platformToCfgs buildPlatform;
     hostCfgs = targetCfg.platformToCfgs hostPlatform;
 
@@ -83,14 +89,19 @@
                     interPkgUnitDeps = _pkgDeps pkgs pkgMetadata resolvedPkg featFor cfgs resolvedPkgFeatFor.deps target;
                   in {
                     name = unitName;
-                    value = {
-                      name = target.name;
-                      kind = kind;
-                      crate_types = target.crate_types;
-                      path = target.path;
-                      edition = target.edition;
-                      features = resolvedPkg.${featFor}.feats;
-                      deps = intraPkgUnitDeps ++ interPkgUnitDeps;
+                    value = buildLibCrate {
+                      # TODO(phlip9): choose right package set by build/hostTarget?
+                      pkgs = pkgsCross;
+                      pkgMetadata = pkgMetadata;
+                      target = {
+                        name = target.name;
+                        kind = kind;
+                        crate_types = target.crate_types;
+                        path = target.path;
+                        edition = target.edition;
+                        features = resolvedPkg.${featFor}.feats;
+                        deps = intraPkgUnitDeps ++ interPkgUnitDeps;
+                      };
                     };
                   })
                   pkgMetadata.targets);
