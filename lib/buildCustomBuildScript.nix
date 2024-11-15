@@ -8,7 +8,6 @@
 }:
 #
 pkgs.stdenv.mkDerivation rec {
-  # TODO(phlip9): special case bin target?
   pname = "${pkgMetadata.name}-${target.kind}";
   version = "${pkgMetadata.version}";
 
@@ -22,7 +21,10 @@ pkgs.stdenv.mkDerivation rec {
   buildPhase = ''
     set -x
 
-    ls -lah $src
+    # pwd
+    # ls -lah
+    #
+    # ls -lah $src
 
     mkdir $out
     rustc \
@@ -32,7 +34,7 @@ pkgs.stdenv.mkDerivation rec {
       --edition="${target.edition}" \
       --remap-path-prefix "$src"="/build/${pname}-${version}" \
       --out-dir=$out \
-      --emit=metadata,link \
+      --emit=link \
       --target=x86_64-unknown-linux-gnu \
       -Copt-level=3 \
       -Cpanic=abort \
@@ -43,7 +45,24 @@ pkgs.stdenv.mkDerivation rec {
       --cap-lints=allow \
       "$src/${target.path}"
 
-    ls -lah $out
+    # mkdir $out/out
+    # ls -lah $out
+
+    pushd $src
+
+    DEBUG=false \
+    HOST="x86_64-unknown-linux-gnu" \
+    OPT_LEVEL=3 \
+    OUT_DIR=$out/out \
+    PROFILE=release \
+    RUSTC=rustc \
+    RUSTDOC=rustdoc \
+    TARGET="x86_64-unknown-linux-gnu" \
+      $out/${target.crate_name} \
+        1>$out/output \
+        2>$out/stderr
+
+    popd
 
     set +x
   '';

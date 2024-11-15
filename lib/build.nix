@@ -1,8 +1,10 @@
 {
+  buildLibCrate,
+  buildCustomBuildScript,
   lib,
   resolve,
   targetCfg,
-  buildLibCrate,
+  vendorCargoDep,
 }: rec {
   build = {
     # JSON-deserialized `Cargo.metadata.json`
@@ -38,6 +40,18 @@
       builtins.mapAttrs (
         pkgId: resolvedPkg: let
           pkgMetadata = metadataPkgs.${pkgId};
+
+          crateSrc =
+            # External: if we're using `craneLib.vendorCargoDeps`, we should
+            # have a `path` attr that contains the vendored crate source.
+            if (pkgMetadata ? path)
+            then pkgMetadata.path
+            # External: if we're using `nargo-metadata --nix-prefetch`, we
+            # should have a pinned crates.io `hash` attr.
+            else if (pkgMetadata ? hash)
+            then (vendorCargoDep pkgMetadata)
+            # TODO(phlip9): workspace crate path
+            else throw "workspace crates not supported yet";
         in
           builtins.mapAttrs (
             featFor: resolvedPkgFeatFor: let
@@ -87,22 +101,30 @@
 
                     # Dependencies on other lib/proc-macro units in other packages.
                     interPkgUnitDeps = _pkgDeps pkgs pkgMetadata resolvedPkg featFor cfgs resolvedPkgFeatFor.deps target;
-                  in {
-                    name = unitName;
-                    value = buildLibCrate {
+
+                    buildTarget = {
+                      name = target.name;
+                      kind = kind;
+                      crate_name = builtins.replaceStrings ["-"] ["_"] target.name;
+                      crate_types = target.crate_types;
+                      path = target.path;
+                      edition = target.edition;
+                      features = resolvedPkg.${featFor}.feats;
+                      deps = intraPkgUnitDeps ++ interPkgUnitDeps;
+                    };
+                    buildArgs = {
                       # TODO(phlip9): choose right package set by build/hostTarget?
                       pkgs = pkgsCross;
                       pkgMetadata = pkgMetadata;
-                      target = {
-                        name = target.name;
-                        kind = kind;
-                        crate_types = target.crate_types;
-                        path = target.path;
-                        edition = target.edition;
-                        features = resolvedPkg.${featFor}.feats;
-                        deps = intraPkgUnitDeps ++ interPkgUnitDeps;
-                      };
+                      crateSrc = crateSrc;
+                      target = buildTarget;
                     };
+                  in {
+                    name = unitName;
+                    value =
+                      if isBuildKind
+                      then buildCustomBuildScript buildArgs
+                      else buildLibCrate buildArgs;
                   })
                   pkgMetadata.targets);
             in
