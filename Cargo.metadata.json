@@ -48,21 +48,16 @@
     {"name":"itoa","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
    ]
   },
-  "#pico-args@0.5.0": {
-   "name": "pico-args",
-   "version": "0.5.0",
+  "#lexopt@0.3.0": {
+   "name": "lexopt",
+   "version": "0.3.0",
    "source": "crates.io",
-   "hash": "sha256-wkqIZdZ+rKvZxpUaysEv2d9KUaw9Z7MnF02N8nyxWeo=",
+   "hash": "sha256-kxOmxsudBTfczDtB6oWpiyhLse1hxPBOQYglmKfnlKU=",
    "edition": "2018",
-   "features": {
-    "combined-flags": [],
-    "default": [],
-    "eq-separator": [],
-    "short-space-opt": []
-   },
+   "features": {},
    "deps": {},
    "targets": [
-    {"name":"pico_args","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
+    {"name":"lexopt","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
    ]
   },
   "#proc-macro2@1.0.86": {
@@ -276,7 +271,7 @@
    "features": {},
    "deps": {
     "#anyhow@1.0.86": {"name":"anyhow","kinds":[{}]},
-    "#pico-args@0.5.0": {"name":"pico-args","kinds":[{"features":["eq-separator"]}]},
+    "#lexopt@0.3.0": {"name":"lexopt","kinds":[{"default":false}]},
     "#semver@1.0.23": {"name":"semver","kinds":[{"features":["serde"]}]},
     "#serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
     "#serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]},
@@ -295,7 +290,7 @@
    "deps": {
     "#anyhow@1.0.86": {"name":"anyhow","kinds":[{}]},
     "#assert-json-diff@2.0.2": {"name":"assert-json-diff","kinds":[{"default":false}]},
-    "#pico-args@0.5.0": {"name":"pico-args","kinds":[{"features":["eq-separator"]}]},
+    "#lexopt@0.3.0": {"name":"lexopt","kinds":[{"default":false}]},
     "#serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
     "#serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]},
     "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{"default":false}]}

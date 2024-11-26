@@ -21,7 +21,7 @@ edition = "2021"
 [workspace.dependencies]
 anyhow = "1"
 assert-json-diff = "2"
-pico-args = { version = "0.5", features = ["eq-separator"] }
+lexopt = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 

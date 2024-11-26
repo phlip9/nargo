@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, path::PathBuf};
+use std::path::PathBuf;
 
 use nargo_core::{fs, time};
 
@@ -11,6 +11,7 @@ USAGE:
 
 FLAGS:
   -h, --help                Prints help information
+  -V, --version             Prints version
 
 OPTIONS:
   --unit-graph PATH         Path to `cargo build --unit-graph` json file.
@@ -18,6 +19,9 @@ OPTIONS:
   --host-target TARGET      The --target triple of the `cargo build` invocation.
   --workspace-root PATH     Path to cargo workspace root directory.
 "#;
+
+const VERSION: &str =
+    concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"), "\n");
 
 pub struct Args {
     unit_graph: PathBuf,
@@ -27,23 +31,48 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn from_env() -> Result<Self, pico_args::Error> {
-        let mut pargs = pico_args::Arguments::from_env();
+    pub fn from_env() -> Result<Self, lexopt::Error> {
+        use lexopt::prelude::*;
 
-        if pargs.contains(["-h", "--help"]) {
-            eprint!("{HELP}");
-            std::process::exit(0);
+        let mut unit_graph: Option<PathBuf> = None;
+        let mut resolve_features: Option<PathBuf> = None;
+        let mut host_target: Option<String> = None;
+        let mut workspace_root: Option<String> = None;
+
+        let mut parser = lexopt::Parser::from_env();
+        while let Some(arg) = parser.next()? {
+            match arg {
+                Short('h') | Long("help") => {
+                    print!("{}", HELP);
+                    std::process::exit(0);
+                }
+                Short('V') | Long("version") => {
+                    print!("{}", VERSION);
+                    std::process::exit(0);
+                }
+                Long("unit-graph") if unit_graph.is_none() => {
+                    unit_graph = Some(PathBuf::from(parser.value()?));
+                }
+                Long("resolve-features") if resolve_features.is_none() => {
+                    resolve_features = Some(PathBuf::from(parser.value()?));
+                }
+                Long("host-target") if host_target.is_none() => {
+                    host_target = Some(parser.value()?.string()?);
+                }
+                Long("workspace-root") if workspace_root.is_none() => {
+                    workspace_root = Some(parser.value()?.string()?);
+                }
+                _ => return Err(arg.unexpected()),
+            }
         }
 
-        let args = Args {
-            unit_graph: pargs.value_from_os_str("--unit-graph", parse_path)?,
-            resolve_features: pargs
-                .value_from_os_str("--resolve-features", parse_path)?,
-            host_target: pargs.value_from_str("--host-target")?,
-            workspace_root: pargs.value_from_str("--workspace-root")?,
-        };
-
-        Ok(args)
+        Ok(Args {
+            unit_graph: unit_graph.ok_or("missing --unit-graph")?,
+            resolve_features: resolve_features
+                .ok_or("missing --resolve-features")?,
+            host_target: host_target.ok_or("missing --host-target")?,
+            workspace_root: workspace_root.ok_or("missing --workspace-root")?,
+        })
     }
 
     pub fn run(self) {
@@ -69,8 +98,4 @@ impl Args {
             )
         );
     }
-}
-
-fn parse_path(os_str: &OsStr) -> Result<PathBuf, pico_args::Error> {
-    Ok(PathBuf::from(os_str))
 }

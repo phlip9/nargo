@@ -9,6 +9,6 @@ nargo-core = { path = "../nargo-core" }
 
 anyhow.workspace = true
 assert-json-diff.workspace = true
-pico-args.workspace = true
+lexopt.workspace = true
 serde.workspace = true
 serde_json.workspace = true

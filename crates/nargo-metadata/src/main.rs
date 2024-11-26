@@ -1,13 +1,13 @@
+use nargo_core::time;
+
 fn main() {
     nargo_core::panic::set_hook();
 
-    let args = match nargo_metadata::cli::Args::from_env() {
-        Ok(args) => args,
+    match time!("parse cli args", nargo_metadata::cli::Args::from_env()) {
+        Ok(args) => args.run(),
         Err(err) => {
             eprintln!("{err}");
             std::process::exit(1);
         }
     };
-
-    args.run();
 }

@@ -1,7 +1,4 @@
-use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use nargo_core::{fs, time};
 
@@ -16,6 +13,9 @@ USAGE:
 FLAGS:
   -h, --help
       Prints help information
+
+  -V, --version
+      Prints version
 
 OPTIONS:
   --input-raw-metadata PATH
@@ -42,6 +42,9 @@ OPTIONS:
       are already vendored using something like `crane.vendorCargoDeps`.
 "#;
 
+const VERSION: &str =
+    concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"), "\n");
+
 pub struct Args {
     input_raw_metadata: Option<PathBuf>,
     input_current_metadata: Option<PathBuf>,
@@ -51,28 +54,55 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn from_env() -> Result<Self, pico_args::Error> {
-        let mut pargs = pico_args::Arguments::from_env();
+    pub fn from_env() -> Result<Self, lexopt::Error> {
+        use lexopt::prelude::*;
 
-        if pargs.contains(["-h", "--help"]) {
-            eprint!("{HELP}");
-            std::process::exit(0);
+        let mut input_raw_metadata: Option<PathBuf> = None;
+        let mut input_current_metadata: Option<PathBuf> = None;
+        let mut output_metadata: Option<PathBuf> = None;
+        let mut nix_prefetch = false;
+        let mut assume_vendored = false;
+
+        let mut parser = lexopt::Parser::from_env();
+        while let Some(arg) = parser.next()? {
+            match arg {
+                Short('h') | Long("help") => {
+                    print!("{}", HELP);
+                    std::process::exit(0);
+                }
+                Short('V') | Long("version") => {
+                    print!("{}", VERSION);
+                    std::process::exit(0);
+                }
+                Long("input-raw-metadata") if input_raw_metadata.is_none() => {
+                    input_raw_metadata = Some(PathBuf::from(parser.value()?));
+                }
+                Long("input-current-metadata")
+                    if input_current_metadata.is_none() =>
+                {
+                    input_current_metadata =
+                        Some(PathBuf::from(parser.value()?));
+                }
+                Long("output-metadata") if output_metadata.is_none() => {
+                    output_metadata = Some(PathBuf::from(parser.value()?));
+                }
+                Long("nix-prefetch") if !nix_prefetch => {
+                    nix_prefetch = true;
+                }
+                Long("assume-vendored") if !assume_vendored => {
+                    assume_vendored = true;
+                }
+                _ => return Err(arg.unexpected()),
+            }
         }
 
-        let args = Args {
-            input_raw_metadata: pargs
-                .opt_value_from_os_str("--input-raw-metadata", parse_path)?,
-            input_current_metadata: pargs.opt_value_from_os_str(
-                "--input-current-metadata",
-                parse_path,
-            )?,
-            output_metadata: pargs
-                .opt_value_from_os_str("--output-metadata", parse_path)?,
-            nix_prefetch: pargs.contains("--nix-prefetch"),
-            assume_vendored: pargs.contains("--assume-vendored"),
-        };
-
-        Ok(args)
+        Ok(Args {
+            input_raw_metadata,
+            input_current_metadata,
+            output_metadata,
+            nix_prefetch,
+            assume_vendored,
+        })
     }
 
     pub fn run(self) {
@@ -103,8 +133,4 @@ impl Args {
 
         time!("run", run::run(args));
     }
-}
-
-fn parse_path(os_str: &OsStr) -> Result<PathBuf, pico_args::Error> {
-    Ok(PathBuf::from(os_str))
 }
