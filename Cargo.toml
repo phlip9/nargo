@@ -5,6 +5,7 @@ members = [
     "crates/nargo-core",
     "crates/nargo-metadata",
     "crates/nargo-resolve",
+    "crates/nargo-rustc",
 ]
 
 exclude = [
