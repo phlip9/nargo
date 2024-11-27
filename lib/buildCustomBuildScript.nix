@@ -2,6 +2,7 @@
 #
 {
   pkgs,
+  nargo-rustc,
   pkgMetadata,
   crateSrc,
   target,
@@ -13,18 +14,20 @@ pkgs.stdenv.mkDerivation rec {
 
   src = crateSrc;
 
-  depsBuildBuild = [pkgs.rustc];
+  depsBuildBuild = [pkgs.rustc nargo-rustc];
 
   phases = ["buildPhase"];
 
   # TODO(phlip9): do we need -Cmetadata=XXXX and -Cextra-filename=-XXXX?
   buildPhase = ''
-    set -x
+    # set -x
 
     # pwd
     # ls -lah
     #
     # ls -lah $src
+
+    nargo-rustc --help
 
     mkdir $out
     rustc \

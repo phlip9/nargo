@@ -1,7 +1,8 @@
 {
-  buildLibCrate,
   buildCustomBuildScript,
+  buildLibCrate,
   lib,
+  nargo-rustc,
   resolve,
   targetCfg,
   vendorCargoDep,
@@ -115,6 +116,7 @@
                     buildArgs = {
                       # TODO(phlip9): choose right package set by build/hostTarget?
                       pkgs = pkgsCross;
+                      nargo-rustc = nargo-rustc;
                       pkgMetadata = pkgMetadata;
                       crateSrc = crateSrc;
                       target = buildTarget;

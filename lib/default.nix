@@ -37,14 +37,7 @@ lib.makeScope pkgs.newScope (self: {
   };
 
   # `cargo build`, implemented in nix.
-  build = import ./build.nix {
-    inherit lib;
-    resolve = self.resolve;
-    targetCfg = self.targetCfg;
-    buildLibCrate = self.buildLibCrate;
-    buildCustomBuildScript = self.buildCustomBuildScript;
-    vendorCargoDep = self.vendorCargoDep;
-  };
+  build = self.callPackage ./build.nix {};
 
   # `rustc` compile a single crate lib
   buildLibCrate = import ./buildLibCrate.nix {};
