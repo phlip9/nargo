@@ -254,11 +254,13 @@
    "name": "nargo-core",
    "version": "0.1.0",
    "edition": "2021",
-   "features": {},
+   "features": {
+    "default": [],
+    "serde": ["dep:serde"]
+   },
    "deps": {
     "#anyhow@1.0.86": {"name":"anyhow","kinds":[{}]},
-    "#serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
-    "#serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]}
+    "#serde@1.0.203": {"name":"serde","kinds":[{"optional":true,"features":["derive"]}]}
    },
    "targets": [
     {"name":"nargo_core","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
@@ -275,7 +277,7 @@
     "#semver@1.0.23": {"name":"semver","kinds":[{"features":["serde"]}]},
     "#serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
     "#serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]},
-    "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{"default":false}]}
+    "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{"features":["serde"]}]}
    },
    "targets": [
     {"name":"nargo-metadata","kind":["bin"],"crate_types":["bin"],"path":"src/main.rs","edition":"2021"},
@@ -293,7 +295,7 @@
     "#lexopt@0.3.0": {"name":"lexopt","kinds":[{"default":false}]},
     "#serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
     "#serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]},
-    "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{"default":false}]}
+    "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{"features":["serde"]}]}
    },
    "targets": [
     {"name":"nargo-resolve","kind":["bin"],"crate_types":["bin"],"path":"src/main.rs","edition":"2021"},
@@ -309,7 +311,7 @@
     "#anyhow@1.0.86": {"name":"anyhow","kinds":[{}]},
     "#lexopt@0.3.0": {"name":"lexopt","kinds":[{"default":false}]},
     "#semver@1.0.23": {"name":"semver","kinds":[{}]},
-    "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{"default":false}]}
+    "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{}]}
    },
    "targets": [
     {"name":"nargo-rustc","kind":["bin"],"crate_types":["bin"],"path":"src/main.rs","edition":"2021"},

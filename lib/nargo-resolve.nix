@@ -24,7 +24,7 @@ craneLib.buildPackage {
     ];
   };
 
-  cargoExtraArgs = "--bin=nargo-resolve";
+  cargoExtraArgs = "-p nargo-resolve --bin nargo-resolve";
 
   cargoArtifacts = null;
   doCheck = false;

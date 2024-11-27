@@ -1,12 +1,12 @@
 //! nargo types
 
 use anyhow::Context as _;
-use serde::{Deserialize, Serialize};
 
 const CRATES_IO_REGISTRY: &str =
     "registry+https://github.com/rust-lang/crates.io-index";
 
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(test, derive(Debug))]
 pub struct PkgId<'a>(pub &'a str);
 

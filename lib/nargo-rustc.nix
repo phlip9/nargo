@@ -24,7 +24,7 @@ craneLib.buildPackage {
     ];
   };
 
-  cargoExtraArgs = "--bin=nargo-rustc";
+  cargoExtraArgs = "-p nargo-rustc --bin nargo-rustc";
 
   cargoArtifacts = null;
   doCheck = false;

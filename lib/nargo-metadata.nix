@@ -33,7 +33,7 @@ craneLib.buildPackage rec {
     ];
   };
 
-  cargoExtraArgs = "--bin=nargo-metadata";
+  cargoExtraArgs = "-p nargo-metadata --bin nargo-metadata";
 
   cargoArtifacts = null;
   doCheck = false;

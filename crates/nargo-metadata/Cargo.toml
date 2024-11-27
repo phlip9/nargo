@@ -5,7 +5,7 @@ authors.workspace = true
 edition.workspace = true
 
 [dependencies]
-nargo-core = { path = "../nargo-core" }
+nargo-core = { path = "../nargo-core", features = ["serde"] }
 
 anyhow.workspace = true
 lexopt.workspace = true
