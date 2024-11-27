@@ -30,6 +30,7 @@
     packages = eachSystem (system: {
       nargo-metadata = systemNargoLib.${system}.nargo-metadata;
       nargo-resolve = systemNargoLib.${system}.nargo-resolve;
+      nargo-rustc = systemNargoLib.${system}.nargo-rustc;
     });
 
     tests = eachSystem (system:

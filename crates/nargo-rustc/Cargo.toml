@@ -5,6 +5,8 @@ authors.workspace = true
 edition.workspace = true
 
 [dependencies]
+nargo-core = { path = "../nargo-core" }
+
 anyhow.workspace = true
-serde.workspace = true
-serde_json.workspace = true
+lexopt.workspace = true
+semver.workspace = true

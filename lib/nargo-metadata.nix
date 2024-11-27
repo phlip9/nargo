@@ -28,6 +28,8 @@ craneLib.buildPackage rec {
       ../crates/nargo-metadata
       ../crates/nargo-resolve/Cargo.toml
       ../crates/nargo-resolve/src/lib.rs
+      ../crates/nargo-rustc/Cargo.toml
+      ../crates/nargo-rustc/src/lib.rs
     ];
   };
 

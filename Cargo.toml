@@ -22,6 +22,7 @@ edition = "2021"
 anyhow = "1"
 assert-json-diff = "2"
 lexopt = "0.3"
+semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 

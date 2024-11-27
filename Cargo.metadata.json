@@ -307,10 +307,12 @@
    "features": {},
    "deps": {
     "#anyhow@1.0.86": {"name":"anyhow","kinds":[{}]},
-    "#serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
-    "#serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]}
+    "#lexopt@0.3.0": {"name":"lexopt","kinds":[{"default":false}]},
+    "#semver@1.0.23": {"name":"semver","kinds":[{}]},
+    "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{"default":false}]}
    },
    "targets": [
+    {"name":"nargo-rustc","kind":["bin"],"crate_types":["bin"],"path":"src/main.rs","edition":"2021"},
     {"name":"nargo_rustc","kind":["lib"],"crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
    ]
   }

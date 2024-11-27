@@ -24,6 +24,9 @@ lib.makeScope pkgs.newScope (self: {
   # A Rust binary used for testing feature resolution.
   nargo-resolve = self.callPackage ./nargo-resolve.nix {};
 
+  # A Rust binary wrapping around `rustc`, used during crate builds.
+  nargo-rustc = self.callPackage ./nargo-rustc.nix {};
+
   # crane `vendorCargoDeps` on this repo.
   nargoVendoredCargoDeps = craneLib.vendorCargoDeps {src = ../.;};
 
