@@ -11,6 +11,8 @@ use anyhow::Context;
 /// 512 KiB.
 const INIT_SIZE_GUESS: usize = 512 << 10;
 
+// --- read --- //
+
 pub fn read_file_or_stdin(path: Option<&Path>) -> anyhow::Result<Vec<u8>> {
     match path {
         None => read_stdin(),
@@ -50,6 +52,8 @@ fn read_stdin() -> anyhow::Result<Vec<u8>> {
     Ok(buf)
 }
 
+// --- write --- //
+
 pub fn write_file_or_stdout(
     path: Option<&Path>,
     buf: &[u8],
@@ -71,6 +75,12 @@ pub fn write_stdout(buf: &[u8]) -> anyhow::Result<()> {
         .write_all(buf)
         .and_then(|_| stdout.flush())
         .context("<stdout>")
+}
+
+// --- mkdir --- //
+
+pub fn create_dir(path: &Path) -> anyhow::Result<()> {
+    fs::create_dir(path).with_context(|| path_ctx(path))
 }
 
 fn path_ctx(path: &Path) -> String {
