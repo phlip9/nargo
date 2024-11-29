@@ -268,7 +268,7 @@ impl Args {
     pub fn run(self) {
         eprintln!("args: {self:#?}");
 
-        // `rustc` compile
+        // run: `rustc` compile
 
         let crate_name = self.target_name.replace('-', "_");
 
@@ -326,7 +326,7 @@ impl Args {
             panic!("`rustc` exited with non-zero exit code: {code}");
         }
 
-        // $out/build_script_build 1>$out/stdout 2>$out/stderr
+        // run: $out/build_script_build 1>$out/output 2>$out/stderr
         //
         // TODO(phlip9): faithfully impl <src/cargo/core/compiler/custom_build.rs>
 
@@ -401,6 +401,8 @@ impl Args {
         // TODO(phlip9): parse `cargo::error=MESSAGE` and `cargo::warning=MESSAGE`
         //               then fail build if any errors.
 
+        eprint!("{}", cmd.to_string_debug());
+
         let status = time!("run build_script_build", cmd.status())
             .expect("failed to run `$out/build_script_build`");
         if !status.success() {
@@ -421,16 +423,56 @@ trait CommandExt {
 impl CommandExt for Command {
     /// Serialize the `Command` as a human-readable string that you could
     /// (probably) run in a shell.
+    /// TODO(phlip9): shell escape values
     fn to_string_debug(&self) -> String {
-        let mut out = String::with_capacity(1024);
+        let mut out = String::with_capacity(2048);
+
+        // write the envs
+        for (key, maybe_val) in self.get_envs() {
+            let val = match maybe_val {
+                Some(val) => val,
+                None => continue,
+            };
+            let key = key.to_string_lossy();
+            let val = val.to_string_lossy();
+            out.push_str(&key);
+            out.push('=');
+            out.push_str(&val);
+            out.push_str(" \\\n");
+        }
+
+        // write the program by itself
         out.push_str(&self.get_program().to_string_lossy());
         out.push_str(" \\\n");
 
-        for arg in self.get_args() {
+        // place each arg on its own line. If it's an option (starts with '-')
+        // we'll also try to pair it with the option value on the same line.
+        let mut args =
+            self.get_args().map(|arg| arg.to_string_lossy()).peekable();
+        while let Some(arg) = args.next() {
             out.push_str("  ");
-            out.push_str(&arg.to_string_lossy());
-            out.push_str(" \\\n");
+            out.push_str(&arg);
+
+            let is_opt = arg.starts_with('-');
+            if is_opt {
+                let is_next_opt =
+                    args.peek().map(|arg| arg.starts_with('-')).unwrap_or(true);
+
+                if !is_next_opt {
+                    let next_arg = args.next().expect("Must be Some");
+                    out.push(' ');
+                    out.push_str(&next_arg);
+                }
+            }
+
+            if args.peek().is_some() {
+                out.push_str(" \\\n");
+            } else {
+                out.push('\n');
+            }
         }
+
+        // dbg!(out.len());
 
         out
     }
