@@ -1,14 +1,38 @@
 //! nargo types
 
-use anyhow::Context as _;
+use std::{fmt, str::FromStr};
+
+use anyhow::{anyhow, Context as _};
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 const CRATES_IO_REGISTRY: &str =
     "registry+https://github.com/rust-lang/crates.io-index";
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[cfg_attr(test, derive(Debug))]
 pub struct PkgId<'a>(pub &'a str);
+
+/// A cargo package target kind.
+///
+/// Like `cargo::core::manifest::TargetKind` but we keep the rustc `crate-type`
+/// in a separate field.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum TargetKind {
+    Lib,
+    Bin,
+    Test,
+    Bench,
+    ExampleBin,
+    ExampleLib,
+    CustomBuild,
+}
+
+//
+// --- impl PkgId ---
+//
 
 impl<'a> PkgId<'a> {
     pub fn try_from_cargo_pkg_id<'b>(
@@ -45,12 +69,98 @@ impl<'a> PkgId<'a> {
     }
 }
 
+//
+// --- impl TargetKind ---
+//
+
+impl TargetKind {
+    /// Parse the `TargetKind` from cargo's serialized target `kind` and
+    /// `crate_types`.
+    pub fn try_from_cargo_kind<'a>(
+        mut kinds: impl Iterator<Item = &'a str>,
+        mut crate_types: impl Iterator<Item = &'a str>,
+    ) -> Self {
+        match kinds.next().expect("empty target `kind`") {
+            "bench" => return Self::Bench,
+            "bin" => return Self::Bin,
+            "custom-build" => return Self::CustomBuild,
+            "example" => (),
+            "test" => return Self::Test,
+            _ => return Self::Lib,
+        }
+
+        // determine example kind from `crate_types`
+        match crate_types.next().expect("empty target `crate_type`") {
+            "bin" => Self::ExampleBin,
+            _ => Self::ExampleLib,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Lib => "lib",
+            Self::Bin => "bin",
+            Self::Test => "test",
+            Self::Bench => "bench",
+            Self::ExampleBin => "example-bin",
+            Self::ExampleLib => "example-lib",
+            Self::CustomBuild => "custom-build",
+        }
+    }
+}
+
+impl FromStr for TargetKind {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "lib" => Ok(Self::Lib),
+            "bin" => Ok(Self::Bin),
+            "test" => Ok(Self::Test),
+            "bench" => Ok(Self::Bench),
+            "example-bin" => Ok(Self::ExampleBin),
+            "example-lib" => Ok(Self::ExampleLib),
+            "custom-build" => Ok(Self::CustomBuild),
+            _ => Err(anyhow!("invalid `kind`: '{s}'")),
+        }
+    }
+}
+
+impl fmt::Display for TargetKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+impl fmt::Debug for TargetKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for TargetKind {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for TargetKind {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Self, D::Error> {
+        let s = <&str>::deserialize(deserializer)?;
+        TargetKind::from_str(s).map_err(serde::de::Error::custom)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    fn test_pkg_id_try_from_cargo_pkg_id() {
+    fn pkg_id_try_from_cargo_pkg_id() {
         let workspace_root =
             "/nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source";
         let id = "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/age#0.10.0";
@@ -70,5 +180,56 @@ mod test {
         let id = "git+http://github.com/dtolnay/semver?branch=master#a6425e6f41ddc81c6d6dd60c68248e0f0ef046c7";
         let id_clean = PkgId::try_from_cargo_pkg_id_inner(id, workspace_root);
         assert_eq!(id_clean, Some(PkgId(id)));
+    }
+
+    #[test]
+    fn target_kind_from_cargo() {
+        use TargetKind::*;
+        let cases = [
+            ("lib", "lib", Lib),
+            ("cdylib", "cdylib", Lib),
+            ("lib,cdylib,staticlib", "lib,cdylib,staticlib", Lib),
+            ("bin", "bin", Bin),
+            ("test", "bin", Test),
+            ("bench", "bin", Bench),
+            ("example", "bin", ExampleBin),
+            ("example", "lib", ExampleLib),
+            ("example", "cdylib", ExampleLib),
+            ("example", "lib,cdylib,staticlib", ExampleLib),
+            ("custom-build", "bin", CustomBuild),
+        ];
+        for (kinds_str, crate_types_str, expected) in cases {
+            let kinds = kinds_str.split(',');
+            let crate_types = crate_types_str.split(',');
+            let actual = TargetKind::try_from_cargo_kind(kinds, crate_types);
+            assert_eq!(
+                actual, expected,
+                "kind: {kinds_str}, crate_type: {crate_types_str}"
+            );
+        }
+    }
+
+    const TARGET_KINDS: [TargetKind; 7] = {
+        use TargetKind::*;
+        [Lib, Bin, Test, Bench, ExampleBin, ExampleLib, CustomBuild]
+    };
+
+    #[test]
+    fn target_kind_roundtrip() {
+        let kinds = TARGET_KINDS.to_vec();
+        let kinds_ser = kinds
+            .iter()
+            .map(|k| k.as_str().to_owned())
+            .collect::<Vec<_>>();
+        let kinds_ser_de = kinds_ser
+            .iter()
+            .map(|k| TargetKind::from_str(k).unwrap())
+            .collect::<Vec<_>>();
+        let kinds_ser_de_ser = kinds_ser_de
+            .iter()
+            .map(|k| k.to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(kinds, kinds_ser_de);
+        assert_eq!(kinds_ser, kinds_ser_de_ser);
     }
 }
