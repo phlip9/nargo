@@ -1,8 +1,6 @@
 {
-  buildCustomBuildScript,
-  buildLibCrate,
+  buildCrate,
   lib,
-  nargo-rustc,
   resolve,
   targetCfg,
   vendorCargoDep,
@@ -64,11 +62,11 @@
               pkgUnits =
                 builtins.listToAttrs
                 (builtins.map (target: let
-                    kind = builtins.head target.kind;
+                    kind = target.kind;
 
                     isLibKind = kind == "lib";
                     isBuildKind = kind == "custom-build";
-                    isProcMacroKind = kind == "proc-macro";
+                    isProcMacroKind = builtins.elem "proc-macro" target.crate_types;
 
                     unitName =
                       if isLibKind || isBuildKind || isProcMacroKind
@@ -106,27 +104,22 @@
                     buildTarget = {
                       name = target.name;
                       kind = kind;
-                      crate_name = builtins.replaceStrings ["-"] ["_"] target.name;
+                      # crate_name = builtins.replaceStrings ["-"] ["_"] target.name;
                       crate_types = target.crate_types;
                       path = target.path;
                       edition = target.edition;
                       features = resolvedPkg.${featFor}.feats;
                       deps = intraPkgUnitDeps ++ interPkgUnitDeps;
                     };
-                    buildArgs = {
+                  in {
+                    name = unitName;
+                    value = buildCrate {
                       # TODO(phlip9): choose right package set by build/hostTarget?
                       pkgs = pkgsCross;
-                      nargo-rustc = nargo-rustc;
                       pkgMetadata = pkgMetadata;
                       crateSrc = crateSrc;
                       target = buildTarget;
                     };
-                  in {
-                    name = unitName;
-                    value =
-                      if isBuildKind
-                      then buildCustomBuildScript buildArgs
-                      else buildLibCrate buildArgs;
                   })
                   pkgMetadata.targets);
             in

@@ -39,11 +39,8 @@ lib.makeScope pkgs.newScope (self: {
   # `cargo build`, implemented in nix.
   build = self.callPackage ./build.nix {};
 
-  # `rustc` compile a single crate lib
-  buildLibCrate = import ./buildLibCrate.nix {};
-
-  # `rustc` compile and run a crate's build.rs script
-  buildCustomBuildScript = import ./buildCustomBuildScript.nix {};
+  # compile a single crate target with `nargo-rustc`, which wraps `rustc`
+  buildCrate = self.callPackage ./buildCrate.nix {};
 
   # Rust `cfg(...)` expression parser and evaluator.
   targetCfg = import ./targetCfg.nix {inherit lib;};

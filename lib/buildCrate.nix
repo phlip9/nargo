@@ -1,8 +1,7 @@
-{}:
+{nargo-rustc}:
 #
 {
   pkgs,
-  nargo-rustc,
   pkgMetadata,
   crateSrc,
   target,
@@ -14,6 +13,8 @@ pkgs.stdenv.mkDerivation rec {
 
   src = crateSrc;
 
+  # TODO(phlip9): need to place `rustc` in depsBuildBuild vs depsBuildHost (?)
+  # depending on target/kind/etc.
   depsBuildBuild = [pkgs.rustc nargo-rustc];
 
   phases = ["buildPhase"];

@@ -544,7 +544,7 @@
 
   _pkgContainsProcMacroTarget = pkg:
     builtins.any
-    (target: builtins.any (kind: kind == "proc-macro") target.kind)
+    (target: builtins.any (crate_type: crate_type == "proc-macro") target.crate_types)
     pkg.targets;
 
   # Parse a raw feature string into a `FeatureValue`:
