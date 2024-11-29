@@ -157,9 +157,9 @@ USAGE:
 const VERSION: &str =
     concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"), "\n");
 
-#[allow(dead_code)] // TODO(phlip9): remove
 #[derive(Debug)] // TODO(phlip9): remove
 pub struct Args {
+    // cli args
     pkg_name: String,
     kind: String,
     target_name: String,
@@ -169,6 +169,7 @@ pub struct Args {
     features: String,
     target: String,
 
+    // envs
     src: PathBuf,
     out: PathBuf,
     version: semver::Version,
@@ -268,9 +269,61 @@ impl Args {
     pub fn run(self) {
         eprintln!("args: {self:#?}");
 
-        // run: `rustc` compile
+        BuildContext::from_args(self).run()
+    }
+}
 
-        let crate_name = self.target_name.replace('-', "_");
+struct BuildContext {
+    pkg_name: String,
+    kind: String,
+    #[allow(dead_code)] // TODO(phlip9): remove
+    target_name: String,
+    crate_type: String,
+    path: PathBuf,
+    edition: String,
+    features: String,
+    target: String,
+    src: PathBuf,
+    out: PathBuf,
+    version: semver::Version,
+    //
+    crate_name: String,
+}
+
+impl BuildContext {
+    fn from_args(args: Args) -> Self {
+        let crate_name = args.target_name.replace('-', "_").to_owned();
+        Self {
+            pkg_name: args.pkg_name,
+            kind: args.kind,
+            target_name: args.target_name,
+            crate_type: args.crate_type,
+            path: args.path,
+            edition: args.edition,
+            features: args.features,
+            target: args.target,
+            src: args.src,
+            out: args.out,
+            version: args.version,
+            //
+            crate_name,
+        }
+    }
+
+    fn is_custom_build(&self) -> bool {
+        self.kind == "custom-build"
+    }
+
+    fn run(&self) {
+        self.run_rustc();
+
+        if self.is_custom_build() {
+            self.run_build_script();
+        }
+    }
+
+    fn run_rustc(&self) {
+        // run: `rustc` compile
 
         // format!("{src}=/build/{pkg_name}-{version}")
         let remap = {
@@ -286,7 +339,7 @@ impl Args {
 
         let mut cmd = Command::new("rustc");
         cmd.current_dir(&self.src);
-        cmd.args(["--crate-name", &crate_name])
+        cmd.args(["--crate-name", &self.crate_name])
             .args(["--crate-type", &self.crate_type])
             .args(["--edition", &self.edition])
             .args([OsStr::new("--remap-path-prefix"), &remap])
@@ -302,6 +355,11 @@ impl Args {
             .arg("-Cstrip=debuginfo")
             .arg("--cap-lints=allow");
 
+        // TODO(phlip9): if `edition` is unstable for this compiler release,
+        // add `-Zunstable-options`
+
+        // TODO(phlip9): `-Zallow-features` for unstable features in config.toml
+
         // --cfg feature="{feature}"
         for feature in self.features.split(',') {
             cmd.arg("--cfg");
@@ -311,11 +369,11 @@ impl Args {
         cmd.arg(target_path);
 
         // envs
-        cmd.env("CARGO_CRATE_NAME", &crate_name)
+        cmd.env("CARGO_CRATE_NAME", &self.crate_name)
             .env("CARGO_MANIFEST_DIR", &self.src);
 
         // CARGO_PKG_<...> envs
-        cmd.envs_cargo_pkg(&self);
+        cmd.envs_cargo_pkg(self);
 
         eprint!("{}", cmd.to_string_debug());
 
@@ -325,12 +383,14 @@ impl Args {
             let code = status.code().unwrap_or(1);
             panic!("`rustc` exited with non-zero exit code: {code}");
         }
+    }
 
+    fn run_build_script(&self) {
         // run: $out/build_script_build 1>$out/output 2>$out/stderr
         //
         // TODO(phlip9): faithfully impl <src/cargo/core/compiler/custom_build.rs>
 
-        let mut cmd = Command::new(self.out.join(&crate_name));
+        let mut cmd = Command::new(self.out.join(&self.crate_name));
         cmd.current_dir(&self.src)
             .stdout(File::create(self.out.join("output")).expect("$out/output"))
             .stderr(
@@ -381,7 +441,7 @@ impl Args {
         // TODO(phlip9): `links`, `DEP_<name>_<key>`, `NUM_JOBS`, `RUSTC_LINKER`
 
         // CARGO_PKG_<...> envs
-        cmd.envs_cargo_pkg(&self);
+        cmd.envs_cargo_pkg(self);
 
         // CARGO_FEATURE_<feature>=1 envs
         let mut feature_key = String::new();
@@ -417,7 +477,7 @@ impl Args {
 
 trait CommandExt {
     fn to_string_debug(&self) -> String;
-    fn envs_cargo_pkg(&mut self, args: &Args) -> &mut Self;
+    fn envs_cargo_pkg(&mut self, ctx: &BuildContext) -> &mut Self;
 }
 
 impl CommandExt for Command {
@@ -478,20 +538,20 @@ impl CommandExt for Command {
     }
 
     /// Add all the `CARGO_PKG_<...>` envs
-    fn envs_cargo_pkg(&mut self, args: &Args) -> &mut Self {
+    fn envs_cargo_pkg(&mut self, ctx: &BuildContext) -> &mut Self {
         self.env("CARGO_PKG_AUTHORS", "") // TODO
             .env("CARGO_PKG_DESCRIPTION", "") // TODO
             .env("CARGO_PKG_HOMEPAGE", "") // TODO
             .env("CARGO_PKG_LICENSE", "") // TODO
             .env("CARGO_PKG_LICENSE_FILE", "") // TODO
-            .env("CARGO_PKG_NAME", &args.pkg_name)
+            .env("CARGO_PKG_NAME", &ctx.pkg_name)
             .env("CARGO_PKG_README", "") // TODO
             .env("CARGO_PKG_REPOSITORY", "") // TODO
             .env("CARGO_PKG_RUST_VERSION", "") // TODO
-            .env("CARGO_PKG_VERSION", args.version.to_string())
-            .env("CARGO_PKG_VERSION_MAJOR", args.version.major.to_string())
-            .env("CARGO_PKG_VERSION_MINOR", args.version.minor.to_string())
-            .env("CARGO_PKG_VERSION_PATCH", args.version.patch.to_string())
-            .env("CARGO_PKG_VERSION_PRE", args.version.pre.as_str())
+            .env("CARGO_PKG_VERSION", ctx.version.to_string())
+            .env("CARGO_PKG_VERSION_MAJOR", ctx.version.major.to_string())
+            .env("CARGO_PKG_VERSION_MINOR", ctx.version.minor.to_string())
+            .env("CARGO_PKG_VERSION_PATCH", ctx.version.patch.to_string())
+            .env("CARGO_PKG_VERSION_PRE", ctx.version.pre.as_str())
     }
 }
