@@ -1,8 +1,9 @@
 use std::path::Path;
+use std::str::FromStr;
 use std::{borrow::Cow, collections::BTreeMap};
 
 use anyhow::Context as _;
-use nargo_core::nargo::TargetKind;
+use nargo_core::nargo::{CrateType, TargetKind};
 use serde::{Deserialize, Serialize};
 use serde_json::ser::{PrettyFormatter, Serializer};
 use serde_json::value::RawValue;
@@ -485,6 +486,11 @@ impl<'a> ManifestTarget<'a> {
             let crate_types = target.crate_types.iter().copied();
             TargetKind::try_from_cargo_kind(kinds, crate_types)
         };
+
+        // check crate_types
+        for crate_type in &target.crate_types {
+            let _ = CrateType::from_str(crate_type).unwrap();
+        }
 
         Self {
             name: target.name,

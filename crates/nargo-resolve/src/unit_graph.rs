@@ -1,7 +1,5 @@
 //! `cargo build --unit-graph` JSON types
 
-#![allow(dead_code)]
-
 use std::{
     collections::{btree_map::Entry, BTreeMap},
     ffi::OsStr,
@@ -20,8 +18,8 @@ pub struct UnitGraph<'a> {
 
     #[serde(borrow)]
     pub units: Vec<Unit<'a>>,
-
-    pub roots: Vec<usize>,
+    //
+    // pub roots: Vec<usize>,
 }
 
 #[derive(Deserialize)]
@@ -110,8 +108,9 @@ impl<'a> UnitGraph<'a> {
             let nargo_pkg_id = resolve::PkgId(&pkg_id_map[unit.pkg_id]);
             let feat_for = match unit.platform {
                 None => resolve::FeatFor::Build,
-                Some(target) if target == host_target =>
-                    resolve::FeatFor::Normal,
+                Some(target) if target == host_target => {
+                    resolve::FeatFor::Normal
+                }
                 Some(target) => panic!(
                     r#"Found unit with unexpected target triple: '{target}', while building
 our feature resolution type from the cargo unit-graph:

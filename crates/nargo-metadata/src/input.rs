@@ -1,7 +1,5 @@
 //! Parse input from `cargo metadata` json.
 
-#![allow(dead_code)]
-
 use std::{cmp, collections::BTreeMap, fmt};
 
 use anyhow::Context;
@@ -122,8 +120,8 @@ pub struct Node<'a> {
 
 #[derive(Deserialize)]
 pub struct NodeDep<'a> {
-    pub name: &'a str,
-
+    // pub name: &'a str,
+    //
     #[serde(borrow)]
     pub pkg: PkgId<'a>,
 

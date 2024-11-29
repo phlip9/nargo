@@ -30,6 +30,20 @@ pub enum TargetKind {
     CustomBuild,
 }
 
+/// Types of the output artifact that the compiler emits.
+///
+/// Like `cargo::core::compiler::CrateType` but without the `Other` field.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum CrateType {
+    Bin,
+    Lib,
+    Rlib,
+    Dylib,
+    Cdylib,
+    Staticlib,
+    ProcMacro,
+}
+
 //
 // --- impl PkgId ---
 //
@@ -152,6 +166,70 @@ impl<'de> serde::Deserialize<'de> for TargetKind {
     ) -> Result<Self, D::Error> {
         let s = <&str>::deserialize(deserializer)?;
         TargetKind::from_str(s).map_err(serde::de::Error::custom)
+    }
+}
+
+//
+// --- impl CrateType ---
+//
+
+impl CrateType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Bin => "bin",
+            Self::Lib => "lib",
+            Self::Rlib => "rlib",
+            Self::Dylib => "dylib",
+            Self::Cdylib => "cdylib",
+            Self::Staticlib => "staticlib",
+            Self::ProcMacro => "proc-macro",
+        }
+    }
+}
+
+impl FromStr for CrateType {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "bin" => Self::Bin,
+            "lib" => Self::Lib,
+            "rlib" => Self::Rlib,
+            "dylib" => Self::Dylib,
+            "cdylib" => Self::Cdylib,
+            "staticlib" => Self::Staticlib,
+            "proc-macro" => Self::ProcMacro,
+            _ => return Err(anyhow!("invalid crate-type: '{s}'")),
+        })
+    }
+}
+
+impl fmt::Display for CrateType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+impl fmt::Debug for CrateType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for CrateType {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for CrateType {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Self, D::Error> {
+        let s = <&str>::deserialize(deserializer)?;
+        CrateType::from_str(s).map_err(serde::de::Error::custom)
     }
 }
 
