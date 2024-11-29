@@ -1,55 +1,77 @@
-// a
+//! Actually run `rustc`
 
 use std::{
     ffi::OsStr,
     fs::File,
     path::{Path, PathBuf},
     process::Command,
+    str::FromStr,
 };
 
-use nargo_core::{fs, time};
+use nargo_core::{
+    fs,
+    nargo::{CrateType, TargetKind},
+    time,
+};
 
 use crate::cli;
 
 pub(crate) struct BuildContext {
     pkg_name: String,
-    kind: String,
+    target: Target,
+    target_triple: String,
+    src: PathBuf,
+    out: PathBuf,
+}
+
+struct Target {
     #[allow(dead_code)] // TODO(phlip9): remove
-    target_name: String,
-    crate_type: String,
+    name: String,
+    version: semver::Version,
+    kind: TargetKind,
+    crate_name: String,
+    #[allow(dead_code)] // TODO(phlip9): remove
+    crate_types: Vec<CrateType>,
+    crate_types_str: String,
     path: PathBuf,
     edition: String,
     features: String,
-    target: String,
-    src: PathBuf,
-    out: PathBuf,
-    version: semver::Version,
-    //
-    crate_name: String,
 }
 
 impl BuildContext {
     pub(crate) fn from_args(args: cli::Args) -> Self {
         let crate_name = args.target_name.replace('-', "_").to_owned();
-        Self {
-            pkg_name: args.pkg_name,
-            kind: args.kind,
-            target_name: args.target_name,
-            crate_type: args.crate_type,
+        let crate_types = args
+            .crate_type
+            .split(',')
+            .map(CrateType::from_str)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let kind = TargetKind::from_str(&args.kind).unwrap();
+
+        let target = Target {
+            name: args.target_name,
+            version: args.version,
+            kind,
+            crate_name,
+            crate_types,
+            crate_types_str: args.crate_type,
             path: args.path,
             edition: args.edition,
             features: args.features,
-            target: args.target,
+        };
+
+        Self {
+            pkg_name: args.pkg_name,
+            target,
+            target_triple: args.target,
             src: args.src,
             out: args.out,
-            version: args.version,
-            //
-            crate_name,
         }
     }
 
     fn is_custom_build(&self) -> bool {
-        self.kind == "custom-build"
+        self.target.kind == TargetKind::CustomBuild
     }
 
     pub(crate) fn run(&self) {
@@ -67,23 +89,23 @@ impl BuildContext {
         let remap = {
             let mut remap = self.src.clone().into_os_string();
             let remap_to = Path::new("/build")
-                .join(format!("{}-{}", self.pkg_name, self.version));
+                .join(format!("{}-{}", self.pkg_name, self.target.version));
             remap.push("=");
             remap.push(remap_to.as_os_str());
             remap
         };
 
-        let target_path = self.src.join(&self.path);
+        let target_path = self.src.join(&self.target.path);
 
         let mut cmd = Command::new("rustc");
         cmd.current_dir(&self.src);
-        cmd.args(["--crate-name", &self.crate_name])
-            .args(["--crate-type", &self.crate_type])
-            .args(["--edition", &self.edition])
+        cmd.args(["--crate-name", &self.target.crate_name])
+            .args(["--crate-type", &self.target.crate_types_str])
+            .args(["--edition", &self.target.edition])
             .args([OsStr::new("--remap-path-prefix"), &remap])
             .args([OsStr::new("--out-dir"), self.out.as_os_str()])
             .args(["--emit", "link"])
-            .args(["--target", &self.target])
+            .args(["--target", &self.target_triple])
             .arg("-Copt-level=3")
             .arg("-Cdebug-assertions=off")
             .arg("-Cpanic=abort")
@@ -99,7 +121,7 @@ impl BuildContext {
         // TODO(phlip9): `-Zallow-features` for unstable features in config.toml
 
         // --cfg feature="{feature}"
-        for feature in self.features.split(',') {
+        for feature in self.target.features.split(',') {
             cmd.arg("--cfg");
             cmd.arg(format!("feature=\"{feature}\""));
         }
@@ -107,7 +129,7 @@ impl BuildContext {
         cmd.arg(target_path);
 
         // envs
-        cmd.env("CARGO_CRATE_NAME", &self.crate_name)
+        cmd.env("CARGO_CRATE_NAME", &self.target.crate_name)
             .env("CARGO_MANIFEST_DIR", &self.src);
 
         // CARGO_PKG_<...> envs
@@ -128,7 +150,7 @@ impl BuildContext {
         //
         // TODO(phlip9): faithfully impl <src/cargo/core/compiler/custom_build.rs>
 
-        let mut cmd = Command::new(self.out.join(&self.crate_name));
+        let mut cmd = Command::new(self.out.join(&self.target.crate_name));
         cmd.current_dir(&self.src)
             .stdout(File::create(self.out.join("output")).expect("$out/output"))
             .stderr(
@@ -183,7 +205,7 @@ impl BuildContext {
 
         // CARGO_FEATURE_<feature>=1 envs
         let mut feature_key = String::new();
-        for feature in self.features.split(',') {
+        for feature in self.target.features.split(',') {
             const PREFIX: &str = "CARGO_FEATURE_";
             feature_key.clear();
             feature_key.reserve_exact(PREFIX.len() + feature.len());
@@ -277,6 +299,7 @@ impl CommandExt for Command {
 
     /// Add all the `CARGO_PKG_<...>` envs
     fn envs_cargo_pkg(&mut self, ctx: &BuildContext) -> &mut Self {
+        let target = &ctx.target;
         self.env("CARGO_PKG_AUTHORS", "") // TODO
             .env("CARGO_PKG_DESCRIPTION", "") // TODO
             .env("CARGO_PKG_HOMEPAGE", "") // TODO
@@ -286,10 +309,10 @@ impl CommandExt for Command {
             .env("CARGO_PKG_README", "") // TODO
             .env("CARGO_PKG_REPOSITORY", "") // TODO
             .env("CARGO_PKG_RUST_VERSION", "") // TODO
-            .env("CARGO_PKG_VERSION", ctx.version.to_string())
-            .env("CARGO_PKG_VERSION_MAJOR", ctx.version.major.to_string())
-            .env("CARGO_PKG_VERSION_MINOR", ctx.version.minor.to_string())
-            .env("CARGO_PKG_VERSION_PATCH", ctx.version.patch.to_string())
-            .env("CARGO_PKG_VERSION_PRE", ctx.version.pre.as_str())
+            .env("CARGO_PKG_VERSION", target.version.to_string())
+            .env("CARGO_PKG_VERSION_MAJOR", target.version.major.to_string())
+            .env("CARGO_PKG_VERSION_MINOR", target.version.minor.to_string())
+            .env("CARGO_PKG_VERSION_PATCH", target.version.patch.to_string())
+            .env("CARGO_PKG_VERSION_PRE", target.version.pre.as_str())
     }
 }
