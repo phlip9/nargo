@@ -2,6 +2,7 @@ use std::path::Path;
 use std::{borrow::Cow, collections::BTreeMap};
 
 use anyhow::Context as _;
+use nargo_core::nargo::TargetKind;
 use serde::{Deserialize, Serialize};
 use serde_json::ser::{PrettyFormatter, Serializer};
 use serde_json::value::RawValue;
@@ -101,8 +102,7 @@ pub struct Platform<'a>(#[serde(borrow)] pub &'a RawValue);
 pub struct ManifestTarget<'a> {
     pub name: &'a str,
 
-    #[serde(borrow)]
-    pub kind: Cow<'a, [&'a str]>,
+    pub kind: TargetKind,
 
     #[serde(borrow)]
     pub crate_types: Cow<'a, [&'a str]>,
@@ -480,9 +480,15 @@ impl<'a> PkgDepKind<'a> {
 
 impl<'a> ManifestTarget<'a> {
     fn from_input(target: &'a input::ManifestTarget<'a>) -> Self {
+        let kind = {
+            let kinds = target.kind.iter().copied();
+            let crate_types = target.crate_types.iter().copied();
+            TargetKind::try_from_cargo_kind(kinds, crate_types)
+        };
+
         Self {
             name: target.name,
-            kind: Cow::Borrowed(&target.kind),
+            kind,
             crate_types: Cow::Borrowed(&target.crate_types),
             required_features: Cow::Borrowed(&target.required_features),
             path: target.src_path,
