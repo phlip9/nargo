@@ -1,5 +1,6 @@
 //! Actually run `rustc`
 
+use core::str;
 use std::{
     ffi::OsStr,
     fs::File,
@@ -19,6 +20,7 @@ use crate::cli;
 pub(crate) struct BuildContext {
     pkg_name: String,
     target: Target,
+    profile: Profile,
     target_triple: String,
     src: PathBuf,
     out: PathBuf,
@@ -35,7 +37,26 @@ struct Target {
     crate_types_str: String,
     path: PathBuf,
     edition: String,
-    features: String,
+    features: Vec<String>,
+}
+
+#[allow(dead_code)] // TODO(phlip9): remove
+struct Profile {
+    name: String,
+    opt_level: char,
+    lto: String,
+    // codegen_backend,
+    codegen_units: Option<u32>,
+    debuginfo: String,
+    debug_assertions: bool,
+    split_debuginfo: Option<String>,
+    overflow_checks: bool,
+    rpath: bool,
+    panic: &'static str,
+    // incremental,
+    strip: String,
+    // rustflags: profile_rustflags,
+    // trim_paths,
 }
 
 impl BuildContext {
@@ -58,12 +79,27 @@ impl BuildContext {
             crate_types_str: args.crate_type,
             path: args.path,
             edition: args.edition,
-            features: args.features,
+            features: args.features.split(',').map(String::from).collect(),
+        };
+
+        let profile = Profile {
+            name: "debug".to_owned(),
+            opt_level: '1',
+            lto: "off".to_owned(),
+            codegen_units: None,
+            debuginfo: "0".to_owned(),
+            debug_assertions: true,
+            split_debuginfo: None,
+            overflow_checks: true,
+            rpath: false,
+            panic: "abort",
+            strip: "debuginfo".to_owned(),
         };
 
         Self {
             pkg_name: args.pkg_name,
             target,
+            profile,
             target_triple: args.target,
             src: args.src,
             out: args.out,
@@ -104,15 +140,9 @@ impl BuildContext {
             .args(["--edition", &self.target.edition])
             .args([OsStr::new("--remap-path-prefix"), &remap])
             .args([OsStr::new("--out-dir"), self.out.as_os_str()])
-            .args(["--emit", "link"])
             .args(["--target", &self.target_triple])
-            .arg("-Copt-level=3")
-            .arg("-Cdebug-assertions=off")
-            .arg("-Cpanic=abort")
             .arg("--error-format=human")
             .arg("--diagnostic-width=80")
-            .arg("-Cembed-bitcode=no")
-            .arg("-Cstrip=debuginfo")
             .arg("--cap-lints=allow");
 
         // TODO(phlip9): if `edition` is unstable for this compiler release,
@@ -120,17 +150,129 @@ impl BuildContext {
 
         // TODO(phlip9): `-Zallow-features` for unstable features in config.toml
 
+        // TODO(phlip9): `cargo check` => `--emit=metadata`
+
+        // TODO(phlip9): can we even do pipelining?
+        // if self.target.requires_upstream_objects() {
+        //     cmd.arg("--emit=link");
+        // } else {
+        //     cmd.arg("--emit=metadata,link");
+        // }
+        cmd.arg("--emit=link");
+
+        // TODO(phlip9): -C prefer-dynamic
+
+        if self.profile.opt_level != '0' {
+            cmd.arg(format!("-Copt-level={}", self.profile.opt_level));
+        }
+
+        if self.profile.panic != "unwind" {
+            cmd.arg(format!("-Cpanic={}", self.profile.panic));
+        }
+
+        // TODO(phlip9): LTO
+        cmd.arg("-Cembed-bitcode=no");
+
+        // TODO(phlip9): codegen backend
+
+        if let Some(codegen_units) = self.profile.codegen_units {
+            cmd.arg(format!("-Ccodegen-units={codegen_units}"));
+        }
+
+        // TODO(phlip9): debuginfo newtype
+        if self.profile.debuginfo != "0" {
+            cmd.arg(format!("-Cdebuginfo={}", self.profile.debuginfo));
+
+            // TODO(phlip9): check if target platform supports split debuginfo
+            // if let Some(split_debuginfo) = &self.profile.split_debuginfo {
+            //
+            // }
+        }
+
+        // TODO(phlip9): trim paths
+
+        // `-C overflow-checks` is implied by the setting of `-C debug-assertions`,
+        // so we only need to provide `-C overflow-checks` if it differs from
+        // the value of `-C debug-assertions` we would provide.
+        let opt_level = self.profile.opt_level;
+        let debug_assertions = self.profile.debug_assertions;
+        let overflow_checks = self.profile.overflow_checks;
+        if opt_level != '0' {
+            if debug_assertions {
+                cmd.arg("-Cdebug-assertions=on");
+                if !overflow_checks {
+                    cmd.arg("-Coverflow-checks=off");
+                }
+            } else if overflow_checks {
+                cmd.arg("-Coverflow-checks=on");
+            }
+        } else if !debug_assertions {
+            cmd.arg("-Cdebug-assertions=off");
+            if overflow_checks {
+                cmd.arg("-Coverflow-checks=on");
+            }
+        } else if !overflow_checks {
+            cmd.arg("-Coverflow-checks=off");
+        }
+
+        // TODO(phlip9): any test in unit => `--cfg test`
+
         // --cfg feature="{feature}"
-        for feature in self.target.features.split(',') {
+        let features = &self.target.features;
+        for feature in features {
             cmd.arg("--cfg");
             cmd.arg(format!("feature=\"{feature}\""));
         }
+
+        // --check-cfg cfg(feature, values(...))
+        if !features.is_empty() {
+            let mut cfg = String::with_capacity(
+                22 + 4 * features.len()
+                    + features.iter().map(|s| s.len()).sum::<usize>(),
+            );
+            cfg.push_str("cfg(feature, values(");
+            for (i, feature) in features.iter().enumerate() {
+                if i != 0 {
+                    cfg.push_str(", ");
+                }
+                cfg.push('"');
+                cfg.push_str(feature);
+                cfg.push('"');
+            }
+            cfg.push_str("))");
+
+            cmd.arg("--check-cfg");
+            cmd.arg(cfg);
+        }
+
+        // TODO(phlip9): is metadata from $out safe?
+        let metadata = self.out.file_name().unwrap().as_encoded_bytes();
+        let metadata = str::from_utf8(&metadata[..8]).unwrap();
+        cmd.arg(format!("-Cmetadata={metadata}"));
+
+        if self.profile.rpath {
+            cmd.arg("-Crpath");
+        }
+
+        // TODO(phlip9): -C linker={}
+
+        if self.profile.strip != "none" {
+            cmd.arg(format!("-Cstrip={}", self.profile.strip));
+        }
+
+        // TODO(phlip9): build std
 
         cmd.arg(target_path);
 
         // envs
         cmd.env("CARGO_CRATE_NAME", &self.target.crate_name)
             .env("CARGO_MANIFEST_DIR", &self.src);
+
+        if self.target.is_executable() {
+            cmd.env("CARGO_BIN_NAME", &self.target.name);
+        }
+
+        // TODO(phlip9): set `CARGO_BIN_EXE_` env for tests and benches
 
         // CARGO_PKG_<...> envs
         cmd.envs_cargo_pkg(self);
@@ -205,7 +347,7 @@ impl BuildContext {
 
         // CARGO_FEATURE_<feature>=1 envs
         let mut feature_key = String::new();
-        for feature in self.target.features.split(',') {
+        for feature in &self.target.features {
             const PREFIX: &str = "CARGO_FEATURE_";
             feature_key.clear();
             feature_key.reserve_exact(PREFIX.len() + feature.len());
@@ -232,6 +374,32 @@ impl BuildContext {
 
         // TODO(phlip9): we should probably filter the stdout to only useful
         // output and log the rest.
+    }
+}
+
+//
+// --- impl Target ---
+//
+
+impl Target {
+    fn is_executable(&self) -> bool {
+        matches!(self.kind, TargetKind::Bin | TargetKind::ExampleBin)
+    }
+
+    // // TODO(phlip9): -C prefer-dynamic
+    // fn contains_dylib(&self) -> bool {
+    //     self.crate_types.iter().any(|t| *t == CrateType::Dylib)
+    // }
+
+    #[allow(dead_code)] // TODO(phlip9): remove
+    fn requires_upstream_objects(&self) -> bool {
+        match self.kind {
+            TargetKind::Lib | TargetKind::ExampleLib => self
+                .crate_types
+                .iter()
+                .any(CrateType::requires_upstream_objects),
+            _ => true,
+        }
     }
 }
 

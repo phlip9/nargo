@@ -174,6 +174,40 @@ impl<'de> serde::Deserialize<'de> for TargetKind {
 //
 
 impl CrateType {
+    pub fn can_lto(&self) -> bool {
+        match self {
+            CrateType::Bin | CrateType::Staticlib | CrateType::Cdylib => true,
+            CrateType::Lib
+            | CrateType::Rlib
+            | CrateType::Dylib
+            | CrateType::ProcMacro => false,
+        }
+    }
+
+    pub fn is_linkable(&self) -> bool {
+        match self {
+            CrateType::Lib
+            | CrateType::Rlib
+            | CrateType::Dylib
+            | CrateType::ProcMacro => true,
+            CrateType::Bin | CrateType::Cdylib | CrateType::Staticlib => false,
+        }
+    }
+
+    pub fn is_dynamic(&self) -> bool {
+        match self {
+            CrateType::Dylib | CrateType::Cdylib | CrateType::ProcMacro => true,
+            CrateType::Lib
+            | CrateType::Rlib
+            | CrateType::Bin
+            | CrateType::Staticlib => false,
+        }
+    }
+
+    pub fn requires_upstream_objects(&self) -> bool {
+        !matches!(self, CrateType::Lib | CrateType::Rlib)
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Bin => "bin",
