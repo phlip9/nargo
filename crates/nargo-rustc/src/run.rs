@@ -15,7 +15,7 @@ use nargo_core::{
     time,
 };
 
-use crate::{build_script::BuildOutput, cli};
+use crate::{build_script::BuildOutput, cli, shell};
 
 pub(crate) struct BuildContext {
     pkg_name: String,
@@ -457,9 +457,8 @@ trait CommandExt {
 }
 
 impl CommandExt for Command {
-    /// Serialize the `Command` as a human-readable string that you could
-    /// (probably) run in a shell.
-    /// TODO(phlip9): shell escape values
+    /// Serialize the `Command` as a human-readable string that you can run in a
+    /// shell.
     fn to_string_debug(&self) -> String {
         let mut out = String::with_capacity(2048);
 
@@ -473,7 +472,7 @@ impl CommandExt for Command {
             let val = val.to_string_lossy();
             out.push_str(&key);
             out.push('=');
-            out.push_str(&val);
+            out.push_str(&shell::escape(&val));
             out.push_str(" \\\n");
         }
 
@@ -487,7 +486,7 @@ impl CommandExt for Command {
             self.get_args().map(|arg| arg.to_string_lossy()).peekable();
         while let Some(arg) = args.next() {
             out.push_str("  ");
-            out.push_str(&arg);
+            out.push_str(&shell::escape(&arg));
 
             let is_opt = arg.starts_with('-');
             if is_opt {
@@ -497,7 +496,7 @@ impl CommandExt for Command {
                 if !is_next_opt {
                     let next_arg = args.next().expect("Must be Some");
                     out.push(' ');
-                    out.push_str(&next_arg);
+                    out.push_str(&shell::escape(&next_arg));
                 }
             }
 
@@ -507,8 +506,6 @@ impl CommandExt for Command {
                 out.push('\n');
             }
         }
-
-        // dbg!(out.len());
 
         out
     }
