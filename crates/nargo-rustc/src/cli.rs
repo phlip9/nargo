@@ -165,7 +165,6 @@ pub struct Args {
     pub(crate) edition: String,
     pub(crate) features: String,
     pub(crate) target: String,
-    #[allow(dead_code)] // TODO(phlip9): remove
     pub(crate) build_script_dep: Option<PathBuf>,
 
     // envs

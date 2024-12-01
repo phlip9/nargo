@@ -40,7 +40,7 @@ pub struct BuildOutput<'a> {
 //
 
 impl<'a> BuildOutput<'a> {
-    fn parse(input: &'a [u8]) -> Self {
+    pub(crate) fn parse(input: &'a [u8]) -> Self {
         let mut out = Self {
             check_cfgs: Vec::new(),
             cfgs: Vec::new(),

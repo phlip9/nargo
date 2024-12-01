@@ -15,13 +15,14 @@ use nargo_core::{
     time,
 };
 
-use crate::cli;
+use crate::{build_script::BuildOutput, cli};
 
 pub(crate) struct BuildContext {
     pkg_name: String,
     target: Target,
     profile: Profile,
     target_triple: String,
+    build_script_dep: Option<PathBuf>,
     src: PathBuf,
     out: PathBuf,
 }
@@ -101,6 +102,7 @@ impl BuildContext {
             target,
             profile,
             target_triple: args.target,
+            build_script_dep: args.build_script_dep,
             src: args.src,
             out: args.out,
         }
@@ -268,8 +270,27 @@ impl BuildContext {
         // 1. add `-l` and `-L` link flags
         // 2. add `-Clink-arg={}`
         // 3. plugins?
-        // 4. add `--cfg {}` and `--check-cfg {}` flags
-        // 5. add envs
+        if let Some(build_script_dep) = &self.build_script_dep {
+            let path = build_script_dep.join("output");
+            let bytes = fs::read_file(&path)
+                .expect("failed to read build_script_build output")
+                .expect("missing build_script_build output");
+
+            let build_script_output = BuildOutput::parse(&bytes);
+            for check_cfg in build_script_output.check_cfgs {
+                cmd.arg("--check-cfg");
+                cmd.arg(check_cfg);
+            }
+            for cfg in build_script_output.cfgs {
+                cmd.arg("--cfg");
+                cmd.arg(cfg);
+            }
+            for (key, val) in build_script_output.env {
+                cmd.env(key, val);
+            }
+
+            cmd.env("OUT_DIR", build_script_dep.join("out"));
+        }
 
         cmd.arg(target_path);
 
@@ -282,9 +303,6 @@ impl BuildContext {
         }
 
         // TODO(phlip9): set `CARGO_BIN_EXE_` env for tests and benches
-
-        // TODO(phlip9): if we're building a lib/bin/etc and have a build.rs in
-        // our crate, we need to set `OUT_DIR` to `<build-script-drv>/out`.
 
         // TODO(phlip9): set `CARGO_PRIMARY_PACKAGE=1` if we're a `-p` primary
         // workspace package target.
