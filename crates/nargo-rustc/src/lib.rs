@@ -1,2 +1,3 @@
+mod build_script;
 pub mod cli;
-pub mod run;
+mod run;

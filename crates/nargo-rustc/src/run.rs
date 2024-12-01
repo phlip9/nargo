@@ -424,6 +424,10 @@ impl Target {
     }
 }
 
+//
+// --- impl CommandExt ---
+//
+
 trait CommandExt {
     fn to_string_debug(&self) -> String;
     fn envs_cargo_pkg(&mut self, ctx: &BuildContext) -> &mut Self;
