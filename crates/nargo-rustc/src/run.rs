@@ -70,6 +70,11 @@ impl BuildContext {
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
         let kind = TargetKind::from_str(&args.kind).unwrap();
+        let features = if args.features.is_empty() {
+            Vec::new()
+        } else {
+            args.features.split(',').map(String::from).collect()
+        };
 
         let target = Target {
             name: args.target_name,
@@ -80,7 +85,7 @@ impl BuildContext {
             crate_types_str: args.crate_type,
             path: args.path,
             edition: args.edition,
-            features: args.features.split(',').map(String::from).collect(),
+            features,
         };
 
         let profile = Profile {
@@ -152,7 +157,7 @@ impl BuildContext {
 
         // TODO(phlip9): `-Zallow-features` for unstable features in config.toml
 
-        // TODO(phlip9): `cargo check` => `--emit=metadata`
+        // TODO(phlip9): `cargo check` => only `--emit=metadata`
 
         // TODO(phlip9): can we even do pipelining?
         // if self.target.requires_upstream_objects() {

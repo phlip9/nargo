@@ -54,7 +54,7 @@
             else if (pkgMetadata ? hash)
             then (vendorCargoDep pkgMetadata)
             # TODO(phlip9): workspace crate path
-            else throw "workspace crates not supported yet";
+            else ""; # throw "workspace crates not supported yet";
         in
           builtins.mapAttrs (
             featFor: resolvedPkgFeatFor: let
@@ -80,7 +80,7 @@
                     maybePkgUnitsCustomBuild =
                       if pkgUnits ? "custom-build"
                       then pkgUnits."custom-build"
-                      # then ["${pkgId} > ${featFor} > custom-build"]
+                      # then "${pkgId} > ${featFor} > custom-build"
                       else null;
 
                     # the build-script unit (or null), but only if we're not the
@@ -98,8 +98,8 @@
                         (pkgUnits ? lib)
                         # only if lib has a "linkable" output
                         && (builtins.any (t: t == "lib" || t == "proc-macro" || t == "dylib" || t == "rlib") pkgUnits.lib.crate_types)
-                      # then [pkgUnits.lib]
-                      then ["${pkgId} > ${featFor} > lib"]
+                      then [pkgUnits.lib]
+                      # then ["${pkgId} > ${featFor} > lib"]
                       else [];
 
                     # non-build script dependencies on other units within the
@@ -120,11 +120,12 @@
                       path = target.path;
                       edition = target.edition;
                       features = resolvedPkg.${featFor}.feats;
-                      deps = intraPkgUnitDeps ++ interPkgUnitDeps;
                       build_script_dep = buildScriptDep;
+                      deps = intraPkgUnitDeps ++ interPkgUnitDeps;
                     };
                   in {
                     name = unitName;
+                    # value = buildTarget;
                     value = buildCrate {
                       # TODO(phlip9): choose right package set by build/hostTarget?
                       pkgs = pkgsCross;
@@ -147,7 +148,7 @@
     deps = pkgMetadata.deps;
     depPkgIds = builtins.attrNames deps;
 
-    kind = builtins.head target.kind;
+    kind = target.kind;
     isBuildKind = kind == "custom-build";
 
     # TODO(phlip9): support dev deps
@@ -193,7 +194,8 @@
         if relevantPkgDepKinds != []
         # TODO(phlip9): build scripts: for each dep that has a `links` key, also
         # depend on dep's build script
-        then ["${depPkgId} > ${depFeatFor} > ${unitName}"]
+        # then ["${depPkgId} > ${depFeatFor} > ${unitName}"]
+        then [pkgs.${depFeatFor}.${unitName}]
         else []
     )
     depPkgIds;

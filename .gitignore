@@ -35,3 +35,6 @@ result-*
 
 # home-manager generated coc-settings for this repo.
 /.vim/coc-settings.json
+
+# dumping ground for sample data
+/dump
