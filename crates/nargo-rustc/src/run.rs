@@ -2,7 +2,7 @@
 
 use core::str;
 use std::{
-    ffi::OsStr,
+    ffi::{OsStr, OsString},
     fs::File,
     path::{Path, PathBuf},
     process::Command,
@@ -23,6 +23,7 @@ pub(crate) struct BuildContext {
     profile: Profile,
     target_triple: String,
     build_script_dep: Option<PathBuf>,
+    deps: Vec<(String, PathBuf)>,
     src: PathBuf,
     out: PathBuf,
 }
@@ -108,6 +109,7 @@ impl BuildContext {
             profile,
             target_triple: args.target,
             build_script_dep: args.build_script_dep,
+            deps: args.deps,
             src: args.src,
             out: args.out,
         }
@@ -269,7 +271,23 @@ impl BuildContext {
 
         // TODO(phlip9): handle build std
 
-        // TODO(phlip9): deps -> -l link flags
+        // TODO(phlip9): // proc-macro deps -> -L <proc-macro-drv>
+        // TODO(phlip9): proc-macro -> --extern proc_macro
+        // TODO(phlip9): proc-macro -> -C prefer-dynamic
+
+        // deps: --extern <dep-name>=<lib-path>
+        {
+            let mut buf = OsString::new();
+            for (dep_name, lib_path) in &self.deps {
+                cmd.arg("--extern");
+
+                buf.clear();
+                buf.push(OsStr::new(&dep_name.replace('-', "_")));
+                buf.push(OsStr::new("="));
+                buf.push(lib_path.as_path().as_os_str());
+                cmd.arg(&buf);
+            }
+        }
 
         // TODO(phlip9): have build.rs script => parse `<build-script-drv>/out`
         // 1. add `-l` and `-L` link flags

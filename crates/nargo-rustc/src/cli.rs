@@ -166,6 +166,7 @@ pub struct Args {
     pub(crate) features: String,
     pub(crate) target: String,
     pub(crate) build_script_dep: Option<PathBuf>,
+    pub(crate) deps: Vec<(String, PathBuf)>,
 
     // envs
     pub(crate) src: PathBuf,
@@ -193,6 +194,7 @@ impl Args {
         let mut features: Option<String> = None;
         let mut target: Option<String> = None;
         let mut build_script_dep: Option<PathBuf> = None;
+        let mut deps: Vec<(String, PathBuf)> = Vec::new();
 
         let mut parser = lexopt::Parser::from_env();
         while let Some(arg) = parser.next()? {
@@ -233,6 +235,11 @@ impl Args {
                 Long("build-script-dep") if build_script_dep.is_none() => {
                     build_script_dep = Some(PathBuf::from(parser.value()?));
                 }
+                Long("dep") => {
+                    let name = parser.value()?.string()?;
+                    let path = PathBuf::from(parser.value()?);
+                    deps.push((name, path));
+                }
 
                 _ => return Err(arg.unexpected()),
             }
@@ -263,6 +270,7 @@ impl Args {
             features: features.ok_or("missing --features")?,
             target: target.ok_or("missing --target")?,
             build_script_dep,
+            deps,
             src,
             out,
             version,

@@ -78,7 +78,7 @@
                       else "${kind}-${target.name}";
 
                     maybePkgUnitsCustomBuild =
-                      if pkgUnits ? "custom-build"
+                      if pkgUnits ? custom-build
                       then pkgUnits.custom-build
                       # then "${pkgId} > ${featFor} > custom-build"
                       else null;
@@ -93,13 +93,16 @@
 
                     # bins, examples, tests, etc... depend on the lib target if
                     # it exists. Notably the lib target must also be linkable.
-                    maybePkgUnitsLinkableLib =
+                    maybePkgUnitsLinkableLib = let
+                      pkgLibUnit = pkgUnits.lib;
+                      pkgLibTarget = pkgLibUnit.target;
+                    in
                       if
                         (pkgUnits ? lib)
                         # only if lib has a "linkable" output
-                        && (builtins.any (t: t == "lib" || t == "proc-macro" || t == "dylib" || t == "rlib") pkgUnits.lib.target.crate_types)
-                      then [pkgUnits.lib]
+                        && (builtins.any (t: t == "lib" || t == "proc-macro" || t == "dylib" || t == "rlib") pkgLibTarget.crate_types)
                       # then ["${pkgId} > ${featFor} > lib"]
+                      then [(_mkTargetDep pkgLibTarget.crate_name pkgLibUnit pkgLibTarget)]
                       else [];
 
                     # non-build script dependencies on other units within the
@@ -116,8 +119,8 @@
                       name = target.name;
                       kind = kind;
                       is_proc_macro = isProcMacroKind;
-                      # crate_name = builtins.replaceStrings ["-"] ["_"] target.name;
                       crate_types = target.crate_types;
+                      crate_name = builtins.replaceStrings ["-"] ["_"] target.name;
                       path = target.path;
                       edition = target.edition;
                       features = resolvedPkg.${featFor}.feats;
@@ -187,12 +190,14 @@
               && (_isActivatedForPlatform cfgs pkgDepKind)
           )
           pkgDep.kinds;
+
+        depUnit = pkgUnitsByFeatFor.${depFeatFor}.lib;
       in
         if relevantPkgDepKinds != []
         # TODO(phlip9): build scripts: for each dep that has a `links` key, also
         # depend on dep's build script
         # then ["${depPkgId} > ${depFeatFor} > lib"]
-        then [pkgUnitsByFeatFor.${depFeatFor}.lib]
+        then [(_mkTargetDep pkgDepName depUnit depUnit.target)]
         else []
     )
     depPkgIds;
@@ -204,4 +209,15 @@
 
   _pkgContainsProcMacroTarget = pkg:
     (pkg ? build) && (pkg.build.lib.target.is_proc_macro);
+
+  _mkTargetDep = depName: unit: target: {
+    crate_name = target.crate_name;
+    dep_name = depName;
+    lib_ext =
+      # TODO(phlip9): dylib? cdylib?
+      if !target.is_proc_macro
+      then "rlib"
+      else "so";
+    value = unit;
+  };
 }

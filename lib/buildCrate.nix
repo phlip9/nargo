@@ -35,6 +35,18 @@ pkgs.stdenv.mkDerivation {
       then "--build-script-dep \"${target.build_script_dep}\""
       else ""
     } \
+      ${
+      # --dep <dep-name> <value>/lib<crate-name>.<lib-ext>
+      builtins.concatStringsSep " \\\n  "
+      (builtins.map
+        ({
+          dep_name,
+          crate_name,
+          lib_ext,
+          value,
+        }: "--dep ${dep_name} ${value}/lib${crate_name}.${lib_ext}")
+        target.deps)
+    } \
       --target x86_64-unknown-linux-gnu
 
   '';
