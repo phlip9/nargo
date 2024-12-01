@@ -79,7 +79,7 @@
 
                     maybePkgUnitsCustomBuild =
                       if pkgUnits ? "custom-build"
-                      then pkgUnits."custom-build"
+                      then pkgUnits.custom-build
                       # then "${pkgId} > ${featFor} > custom-build"
                       else null;
 
@@ -97,7 +97,7 @@
                       if
                         (pkgUnits ? lib)
                         # only if lib has a "linkable" output
-                        && (builtins.any (t: t == "lib" || t == "proc-macro" || t == "dylib" || t == "rlib") pkgUnits.lib.crate_types)
+                        && (builtins.any (t: t == "lib" || t == "proc-macro" || t == "dylib" || t == "rlib") pkgUnits.lib.target.crate_types)
                       then [pkgUnits.lib]
                       # then ["${pkgId} > ${featFor} > lib"]
                       else [];
@@ -115,6 +115,7 @@
                     buildTarget = {
                       name = target.name;
                       kind = kind;
+                      is_proc_macro = isProcMacroKind;
                       # crate_name = builtins.replaceStrings ["-"] ["_"] target.name;
                       crate_types = target.crate_types;
                       path = target.path;
@@ -125,7 +126,7 @@
                     };
                   in {
                     name = unitName;
-                    # value = buildTarget;
+                    # value = {target = buildTarget;};
                     value = buildCrate {
                       # TODO(phlip9): choose right package set by build/hostTarget?
                       pkgs = pkgsCross;
@@ -168,17 +169,13 @@
         pkgDep = deps.${depPkgId};
         pkgDepName = pkgDep.name;
 
-        depIsProcMacro = _pkgContainsProcMacroTarget pkgs.${depPkgId};
+        pkgUnitsByFeatFor = pkgs.${depPkgId};
+        depIsProcMacro = _pkgContainsProcMacroTarget pkgUnitsByFeatFor;
 
         depFeatFor =
           if depIsProcMacro
           then "build"
           else depFeatForNoProcMacro;
-
-        unitName =
-          if depIsProcMacro
-          then "proc-macro"
-          else "lib";
 
         relevantPkgDepKinds =
           builtins.filter (
@@ -194,8 +191,8 @@
         if relevantPkgDepKinds != []
         # TODO(phlip9): build scripts: for each dep that has a `links` key, also
         # depend on dep's build script
-        # then ["${depPkgId} > ${depFeatFor} > ${unitName}"]
-        then [pkgs.${depFeatFor}.${unitName}]
+        # then ["${depPkgId} > ${depFeatFor} > lib"]
+        then [pkgUnitsByFeatFor.${depFeatFor}.lib]
         else []
     )
     depPkgIds;
@@ -205,5 +202,6 @@
     then true
     else targetCfg.evalCfgExpr cfgs (targetCfg.parseTargetCfgExpr pkgDepKind.target);
 
-  _pkgContainsProcMacroTarget = pkg: (pkg ? build) && (pkg.build ? "proc-macro");
+  _pkgContainsProcMacroTarget = pkg:
+    (pkg ? build) && (pkg.build.lib.target.is_proc_macro);
 }
