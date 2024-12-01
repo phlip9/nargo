@@ -35,6 +35,10 @@
     buildCfgs = targetCfg.platformToCfgs buildPlatform;
     hostCfgs = targetCfg.platformToCfgs hostPlatform;
 
+    # TODO(phlip9): discover target cfgs with `rustc --print=cfg`. Do we also
+    # need some fancy fixpoint iteration a la
+    # `cargo::core::compiler::build_context::target_info::TargetInfo::new`?
+
     pkgs =
       builtins.mapAttrs (
         pkgId: resolvedPkg: let

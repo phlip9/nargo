@@ -260,7 +260,16 @@ impl BuildContext {
             cmd.arg(format!("-Cstrip={}", self.profile.strip));
         }
 
-        // TODO(phlip9): build std
+        // TODO(phlip9): handle build std
+
+        // TODO(phlip9): deps -> -l link flags
+
+        // TODO(phlip9): have build.rs script => parse `<build-script-drv>/out`
+        // 1. add `-l` and `-L` link flags
+        // 2. add `-Clink-arg={}`
+        // 3. plugins?
+        // 4. add `--cfg {}` and `--check-cfg {}` flags
+        // 5. add envs
 
         cmd.arg(target_path);
 
@@ -273,6 +282,14 @@ impl BuildContext {
         }
 
         // TODO(phlip9): set `CARGO_BIN_EXE_` env for tests and benches
+
+        // TODO(phlip9): if we're building a lib/bin/etc and have a build.rs in
+        // our crate, we need to set `OUT_DIR` to `<build-script-drv>/out`.
+
+        // TODO(phlip9): set `CARGO_PRIMARY_PACKAGE=1` if we're a `-p` primary
+        // workspace package target.
+
+        // TODO(phlip9): set `CARGO_TARGET_TMPDIR` if test or bench unit
 
         // CARGO_PKG_<...> envs
         cmd.envs_cargo_pkg(self);
@@ -332,13 +349,17 @@ impl BuildContext {
             .env("CARGO_CFG_UB_CHECKS", "")
             .env("CARGO_CFG_UNIX", "")
             .env("CARGO_ENCODED_RUSTFLAGS", "")
-            .env("DEBUG", "false")
             .env("HOST", "x86_64-unknown-linux-gnu")
-            .env("OPT_LEVEL", "3")
-            .env("PROFILE", "release")
             .env("RUSTC", "rustc")
             .env("RUSTDOC", "rustdoc")
             .env("TARGET", "x86_64-unknown-linux-gnu");
+
+        let profile = &self.profile;
+        let debug = profile.debuginfo != "0";
+        cmd.env("DEBUG", debug.to_string())
+            .env("OPT_LEVEL", profile.opt_level.to_string())
+            .env("PROFILE", &profile.name) // TODO(phlip9): should be base?
+            ;
 
         // TODO(phlip9): `links`, `DEP_<name>_<key>`, `NUM_JOBS`, `RUSTC_LINKER`
 
