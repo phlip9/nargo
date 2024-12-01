@@ -165,6 +165,8 @@ pub struct Args {
     pub(crate) edition: String,
     pub(crate) features: String,
     pub(crate) target: String,
+    #[allow(dead_code)] // TODO(phlip9): remove
+    pub(crate) build_script_dep: Option<PathBuf>,
 
     // envs
     pub(crate) src: PathBuf,
@@ -191,6 +193,7 @@ impl Args {
         let mut edition: Option<String> = None;
         let mut features: Option<String> = None;
         let mut target: Option<String> = None;
+        let mut build_script_dep: Option<PathBuf> = None;
 
         let mut parser = lexopt::Parser::from_env();
         while let Some(arg) = parser.next()? {
@@ -205,28 +208,31 @@ impl Args {
                 }
 
                 Long("pkg-name") if pkg_name.is_none() => {
-                    pkg_name = Some(parser.value()?.string()?)
+                    pkg_name = Some(parser.value()?.string()?);
                 }
                 Long("kind") if kind.is_none() => {
-                    kind = Some(parser.value()?.string()?)
+                    kind = Some(parser.value()?.string()?);
                 }
                 Long("target-name") if target_name.is_none() => {
-                    target_name = Some(parser.value()?.string()?)
+                    target_name = Some(parser.value()?.string()?);
                 }
                 Long("crate-type") if crate_type.is_none() => {
-                    crate_type = Some(parser.value()?.string()?)
+                    crate_type = Some(parser.value()?.string()?);
                 }
                 Long("path") if path.is_none() => {
-                    path = Some(PathBuf::from(parser.value()?))
+                    path = Some(PathBuf::from(parser.value()?));
                 }
                 Long("edition") if edition.is_none() => {
-                    edition = Some(parser.value()?.string()?)
+                    edition = Some(parser.value()?.string()?);
                 }
                 Long("features") if features.is_none() => {
-                    features = Some(parser.value()?.string()?)
+                    features = Some(parser.value()?.string()?);
                 }
                 Long("target") if target.is_none() => {
-                    target = Some(parser.value()?.string()?)
+                    target = Some(parser.value()?.string()?);
+                }
+                Long("build-script-dep") if build_script_dep.is_none() => {
+                    build_script_dep = Some(PathBuf::from(parser.value()?));
                 }
 
                 _ => return Err(arg.unexpected()),
@@ -257,6 +263,7 @@ impl Args {
             edition: edition.ok_or("missing --edition")?,
             features: features.ok_or("missing --features")?,
             target: target.ok_or("missing --target")?,
+            build_script_dep,
             src,
             out,
             version,

@@ -7,7 +7,7 @@
   target,
 }:
 #
-pkgs.stdenv.mkDerivation rec {
+pkgs.stdenv.mkDerivation {
   pname = "${pkgMetadata.name}-${target.kind}";
   version = "${pkgMetadata.version}";
 
@@ -15,6 +15,7 @@ pkgs.stdenv.mkDerivation rec {
 
   # TODO(phlip9): need to place `rustc` in depsBuildBuild vs depsBuildHost (?)
   # depending on target/kind/etc.
+  # TODO(phlip9): use `rustc-unwrapped` to avoid bash overhead?
   depsBuildBuild = [pkgs.rustc nargo-rustc];
 
   phases = ["buildPhase"];
@@ -29,7 +30,13 @@ pkgs.stdenv.mkDerivation rec {
       --path "${target.path}" \
       --edition "${target.edition}" \
       --features "${builtins.concatStringsSep "," (builtins.attrNames target.features)}" \
+      ${
+      if target.build_script_dep != null
+      then "--build-script-dep \"${target.build_script_dep}\""
+      else ""
+    } \
       --target x86_64-unknown-linux-gnu
+
   '';
 
   passthru = {

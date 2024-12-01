@@ -79,9 +79,17 @@
 
                     maybePkgUnitsCustomBuild =
                       if pkgUnits ? "custom-build"
-                      # then [pkgUnits."custom-build"]
-                      then ["${pkgId} > ${featFor} > custom-build"]
-                      else [];
+                      then pkgUnits."custom-build"
+                      # then ["${pkgId} > ${featFor} > custom-build"]
+                      else null;
+
+                    # the build-script unit (or null), but only if we're not the
+                    # build-script itself. we separate this case from the other
+                    # deps since it gets handled very differently.
+                    buildScriptDep =
+                      if isBuildKind
+                      then null
+                      else maybePkgUnitsCustomBuild;
 
                     # bins, examples, tests, etc... depend on the lib target if
                     # it exists. Notably the lib target must also be linkable.
@@ -94,13 +102,12 @@
                       then ["${pkgId} > ${featFor} > lib"]
                       else [];
 
-                    # Dependencies on other units within the same package.
+                    # non-build script dependencies on other units within the
+                    # same package.
                     intraPkgUnitDeps =
-                      if isLibKind
-                      then maybePkgUnitsCustomBuild
-                      else if isBuildKind
+                      if isLibKind || isBuildKind
                       then []
-                      else maybePkgUnitsLinkableLib ++ maybePkgUnitsCustomBuild;
+                      else maybePkgUnitsLinkableLib;
 
                     # Dependencies on other lib/proc-macro units in other packages.
                     interPkgUnitDeps = _pkgDeps pkgs pkgMetadata resolvedPkg featFor cfgs resolvedPkgFeatFor.deps target;
@@ -114,6 +121,7 @@
                       edition = target.edition;
                       features = resolvedPkg.${featFor}.feats;
                       deps = intraPkgUnitDeps ++ interPkgUnitDeps;
+                      build_script_dep = buildScriptDep;
                     };
                   in {
                     name = unitName;
