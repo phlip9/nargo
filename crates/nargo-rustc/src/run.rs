@@ -205,12 +205,17 @@ impl BuildContext {
         // }
         cmd.arg("--emit=link");
 
-        // TODO(phlip9): -C prefer-dynamic
+        // -C prefer-dynamic
+        if self.target.is_proc_macro() || self.target.is_dylib() {
+            cmd.arg("-Cprefer-dynamic");
+        }
 
+        // -C opt-level={}
         if self.profile.opt_level != '0' {
             cmd.arg(format!("-Copt-level={}", self.profile.opt_level));
         }
 
+        // -C panic={}
         if self.profile.panic != "unwind" {
             cmd.arg(format!("-Cpanic={}", self.profile.panic));
         }
@@ -310,10 +315,6 @@ impl BuildContext {
 
         // TODO(phlip9): handle build std
 
-        // TODO(phlip9): // proc-macro deps -> -L <proc-macro-drv>
-        // TODO(phlip9): proc-macro -> --extern proc_macro
-        // TODO(phlip9): proc-macro -> -C prefer-dynamic
-
         // direct deps: --extern <dep-name>=<lib-path>
         {
             let mut buf = OsString::new();
@@ -326,6 +327,12 @@ impl BuildContext {
                 buf.push(dep.lib_path());
                 cmd.arg(&buf);
             }
+        }
+
+        // proc-macro -> --extern proc_macro
+        if self.target.is_proc_macro() {
+            cmd.arg("--extern");
+            cmd.arg("proc_macro");
         }
 
         // transitive deps: `-L dependency=${out}/deps` (via `collect_transitive_deps`)
@@ -542,7 +549,7 @@ impl BuildContext {
             link_src.clear();
             link_src.as_mut_os_string().push(&dep.out);
             link_src.push("deps");
-            link_src.push(&tdep_lib_filename);
+            link_src.push(tdep_lib_filename);
 
             let link_src_canon = link_src.canonicalize().expect("canonicalize");
 
@@ -550,7 +557,7 @@ impl BuildContext {
             link_dst.clear();
             link_dst.as_mut_os_string().push(&self.out);
             link_dst.push("deps");
-            link_dst.push(&tdep_lib_filename);
+            link_dst.push(tdep_lib_filename);
 
             fs::symlink(&link_src_canon, &link_dst).expect(
                 "Failed to symlink transitive dep into our $out/deps dir",
@@ -616,16 +623,21 @@ impl Target {
         self.kind == TargetKind::Lib
     }
 
-    // fn is_dylib(&self) -> bool {
-    //     self.is_lib()
-    //         && (self.crate_types.iter().any(|x| *x == CrateType::Dylib))
-    // }
-    //
+    fn is_dylib(&self) -> bool {
+        self.is_lib()
+            && (self.crate_types.iter().any(|x| *x == CrateType::Dylib))
+    }
+
     // // TODO(phlip9): -C prefer-dynamic
     // fn is_cdylib(&self) -> bool {
     //     self.is_lib()
     //         && (self.crate_types.iter().any(|x| *x == CrateType::Cdylib))
     // }
+
+    fn is_proc_macro(&self) -> bool {
+        self.is_lib()
+            && self.crate_types.iter().any(|x| *x == CrateType::ProcMacro)
+    }
 
     fn is_executable(&self) -> bool {
         matches!(self.kind, TargetKind::Bin | TargetKind::ExampleBin)
