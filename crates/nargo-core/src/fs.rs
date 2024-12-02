@@ -1,7 +1,7 @@
 use std::{
     fs,
     io::{self, Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use anyhow::Context;
@@ -10,6 +10,14 @@ use anyhow::Context;
 /// many realloc's while reading stdin, we'll make an initial size guess of
 /// 512 KiB.
 const INIT_SIZE_GUESS: usize = 512 << 10;
+
+fn path_ctx(path: &Path) -> Box<str> {
+    path.to_string_lossy().into()
+}
+
+fn link_ctx(target: &Path, symlink: &Path) -> Box<str> {
+    format!("{} -> {}", symlink.display(), target.display()).into()
+}
 
 // --- read --- //
 
@@ -83,6 +91,25 @@ pub fn create_dir(path: &Path) -> anyhow::Result<()> {
     fs::create_dir(path).with_context(|| path_ctx(path))
 }
 
-fn path_ctx(path: &Path) -> String {
-    path.to_string_lossy().into_owned()
+// --- link --- //
+
+// pub fn hard_link(target: &Path, link: &Path) -> anyhow::Result<()> {
+//     fs::hard_link(target, link).with_context(|| link_ctx(target, link))
+// }
+
+/// Create a symlink file `symlink` -- pointing at --> a `target` path.
+pub fn symlink(target: &Path, symlink: &Path) -> anyhow::Result<()> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(target, symlink)
+            .with_context(|| link_ctx(target, symlink))
+    }
+    #[cfg(not(unix))]
+    {
+        panic!("TODO(phlip9): symlink not supported yet on this platform?")
+    }
+}
+
+pub fn canonicalize(path: &Path) -> anyhow::Result<PathBuf> {
+    fs::canonicalize(path).with_context(|| path_ctx(path))
 }

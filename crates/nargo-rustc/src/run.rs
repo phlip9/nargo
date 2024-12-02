@@ -2,9 +2,10 @@
 
 use core::str;
 use std::{
+    collections::BTreeMap,
     ffi::{OsStr, OsString},
     fs::File,
-    path::{Path, PathBuf},
+    path::{self, Path, PathBuf},
     process::Command,
     str::FromStr,
 };
@@ -65,6 +66,7 @@ struct Dep {
     /// The dep's name in this crate's Cargo.toml.
     dep_name: String,
     /// The dep's original crate name.
+    #[allow(dead_code)] // TODO(phlip9): remove
     crate_name: String,
     /// The nix store path containing the dep's output artifacts.
     out: PathBuf,
@@ -114,7 +116,10 @@ impl BuildContext {
             strip: "debuginfo".to_owned(),
         };
 
-        let deps = args.deps.into_iter().map(Dep::from_cli).collect();
+        let deps = time!(
+            "read direct deps",
+            args.deps.into_iter().map(Dep::from_cli).collect()
+        );
 
         Self {
             pkg_name: args.pkg_name,
@@ -128,15 +133,33 @@ impl BuildContext {
         }
     }
 
-    fn is_custom_build(&self) -> bool {
-        self.target.kind == TargetKind::CustomBuild
-    }
-
     pub(crate) fn run(&self) {
+        fs::create_dir(&self.out).expect("mkdir");
+
+        // Collect transitive deps into `$out/deps` so `rustc` can find them.
+        let tdep_lib_filenames =
+            time!("collect transitive deps", self.collect_transitive_deps());
+
+        // Compile unit
         self.run_rustc();
 
+        // For `build.rs` scripts, we also run the `build_script_build`
         if self.is_custom_build() {
             self.run_build_script();
+        }
+
+        // For targets that should propagate, also collect our direct deps into
+        // `$out/deps`.
+        if self.target.propagates_deps() {
+            time!(
+                "collect direct deps",
+                self.collect_direct_deps(tdep_lib_filenames)
+            );
+        } else {
+            let _ = time!(
+                "clear deps dir",
+                std::fs::remove_dir_all(self.out.join("deps"))
+            );
         }
     }
 
@@ -291,7 +314,7 @@ impl BuildContext {
         // TODO(phlip9): proc-macro -> --extern proc_macro
         // TODO(phlip9): proc-macro -> -C prefer-dynamic
 
-        // immediate deps: --extern <dep-name>=<lib-path>
+        // direct deps: --extern <dep-name>=<lib-path>
         {
             let mut buf = OsString::new();
             for dep in &self.deps {
@@ -303,6 +326,21 @@ impl BuildContext {
                 buf.push(dep.lib_path());
                 cmd.arg(&buf);
             }
+        }
+
+        // transitive deps: `-L dependency=${out}/deps` (via `collect_transitive_deps`)
+        // TODO(phlip9): is there any downside to just using `all=`?
+        if !self.deps.is_empty() {
+            let mut buf = OsString::with_capacity(
+                10 + 1 + self.out.as_os_str().len() + 1 + 4,
+            );
+            buf.push("dependency=");
+            buf.push(self.out.as_os_str());
+            buf.push(path::MAIN_SEPARATOR_STR);
+            buf.push("deps");
+
+            cmd.arg("-L");
+            cmd.arg(buf);
         }
 
         // TODO(phlip9): have build.rs script => parse `<build-script-drv>/out`
@@ -453,6 +491,120 @@ impl BuildContext {
         // TODO(phlip9): we should probably filter the stdout to only useful
         // output and log the rest.
     }
+
+    /// Collect and symlink all deps' unique transitive deps into our
+    /// `${out}/deps` dir. This dir will get passed as `-L ...` to `rustc` so it
+    /// can locate transitive dep libs during compilation.
+    ///
+    /// TODO(phlip9): apparently nix builds can't hard link to other store paths
+    /// (anymore?)? is this something I can get working again?
+    fn collect_transitive_deps(&self) -> BTreeMap<OsString, &Dep> {
+        let mut tdep_lib_filenames: BTreeMap<OsString, &Dep> = BTreeMap::new();
+
+        // Nothing to collect
+        if self.deps.is_empty() {
+            return tdep_lib_filenames;
+        }
+
+        // Collect all the unique transitive dep libs from each `${dep}/deps`
+        // directory.
+        for dep in &self.deps {
+            let dir_iter = match dep.out.join("deps").read_dir().ok() {
+                Some(x) => x,
+                None => continue,
+            };
+
+            let dep_tdep_lib_filenames = dir_iter.filter_map(|dir_entry| {
+                let dir_entry = dir_entry.ok()?;
+                let file_type = dir_entry.file_type().ok()?;
+                (file_type.is_file() || file_type.is_symlink())
+                    .then(|| dir_entry.file_name())
+            });
+
+            for dep_tdep_lib_filename in dep_tdep_lib_filenames {
+                tdep_lib_filenames
+                    .try_insert_stable(dep_tdep_lib_filename, dep);
+            }
+        }
+
+        fs::create_dir(&self.out.join("deps")).expect("mkdir");
+
+        // Symlink all our deps' transitive deps into our own `$out/deps` dir.
+
+        // TODO(phlip9): place this in a tmpdir if we're a bin target (+etc)
+        // that doesn't need to propagate?
+
+        let mut link_src = PathBuf::new();
+        let mut link_dst = PathBuf::new();
+
+        for (tdep_lib_filename, dep) in &tdep_lib_filenames {
+            // link_src = "${dep.out}/deps/${tdep_lib_filename}"
+            link_src.clear();
+            link_src.as_mut_os_string().push(&dep.out);
+            link_src.push("deps");
+            link_src.push(&tdep_lib_filename);
+
+            let link_src_canon = link_src.canonicalize().expect("canonicalize");
+
+            // link_dst = "${out}/deps/${tdep_lib_filename}"
+            link_dst.clear();
+            link_dst.as_mut_os_string().push(&self.out);
+            link_dst.push("deps");
+            link_dst.push(&tdep_lib_filename);
+
+            fs::symlink(&link_src_canon, &link_dst).expect(
+                "Failed to symlink transitive dep into our $out/deps dir",
+            );
+        }
+
+        tdep_lib_filenames
+    }
+
+    /// After compilation, we'll collect our direct deps into our `$out/deps`
+    /// dir. We do this after since we pass direct deps into compilation via
+    /// precise `--extern <dep-name>=<lib-path>` args.
+    fn collect_direct_deps(
+        &self,
+        tdep_lib_filenames: BTreeMap<OsString, &Dep>,
+    ) {
+        if self.deps.is_empty() {
+            return;
+        }
+
+        // TODO(phlip9): skip if we're a bin target (+etc) that doesn't need to
+        // propagate?
+
+        let mut target = PathBuf::new();
+        let mut symlink = PathBuf::new();
+
+        for dep in &self.deps {
+            // TODO(phlip9): how to handle multiple output libs?
+            let dep_lib = dep.libs.first().unwrap();
+
+            // skip deps that we've already linked from `collect_transitive_deps`
+            if tdep_lib_filenames.contains_key(OsStr::new(&dep_lib)) {
+                continue;
+            }
+
+            // link_src = "${dep.out}/${dep_lib}"
+            target.clear();
+            target.as_mut_os_string().push(&dep.out);
+            target.push(dep_lib);
+
+            // link_dst = "${out}/deps/${dep_lib}"
+            symlink.clear();
+            symlink.as_mut_os_string().push(&self.out);
+            symlink.push("deps");
+            symlink.push(dep_lib);
+
+            fs::symlink(&target, &symlink)
+                .expect("Failed to symlink direct dep into our $out/deps dir");
+        }
+    }
+
+    fn is_custom_build(&self) -> bool {
+        self.target.kind == TargetKind::CustomBuild
+    }
 }
 
 //
@@ -460,10 +612,10 @@ impl BuildContext {
 //
 
 impl Target {
-    // fn is_lib(&self) -> bool {
-    //     self.kind == TargetKind::Lib
-    // }
-    //
+    fn is_lib(&self) -> bool {
+        self.kind == TargetKind::Lib
+    }
+
     // fn is_dylib(&self) -> bool {
     //     self.is_lib()
     //         && (self.crate_types.iter().any(|x| *x == CrateType::Dylib))
@@ -483,7 +635,7 @@ impl Target {
     fn uses_extra_filename(&self) -> bool {
         // only lib targets
         // TODO(phlip9): no (dylib or cdylib) && path dep
-        matches!(self.kind, TargetKind::Lib | TargetKind::ExampleLib)
+        self.is_lib()
     }
 
     #[allow(dead_code)] // TODO(phlip9): remove
@@ -495,6 +647,18 @@ impl Target {
                 .any(CrateType::requires_upstream_objects),
             _ => true,
         }
+    }
+
+    /// True if this target type should propagate its deps (and transitive deps)
+    /// to a dependent crate.
+    fn propagates_deps(&self) -> bool {
+        self.is_lib()
+            && self.crate_types.iter().any(|x| {
+                matches!(
+                    *x,
+                    CrateType::Lib | CrateType::Rlib | CrateType::Dylib
+                )
+            })
     }
 }
 
@@ -633,5 +797,28 @@ impl CommandExt for Command {
             .env("CARGO_PKG_VERSION_MINOR", target.version.minor.to_string())
             .env("CARGO_PKG_VERSION_PATCH", target.version.patch.to_string())
             .env("CARGO_PKG_VERSION_PRE", target.version.pre.as_str())
+    }
+}
+
+//
+// --- impl BTreeMapExt ---
+//
+
+trait BTreeMapExt<K, V> {
+    /// Try to insert `key` -> `value` into the `BTreeMap`. Returns `true` if
+    /// it was actually inserted (because `key` was not already in the map).
+    fn try_insert_stable(&mut self, key: K, value: V) -> bool;
+}
+
+impl<K: Ord, V> BTreeMapExt<K, V> for BTreeMap<K, V> {
+    fn try_insert_stable(&mut self, key: K, value: V) -> bool {
+        use std::collections::btree_map::Entry;
+        match self.entry(key) {
+            Entry::Occupied(_) => false,
+            Entry::Vacant(entry) => {
+                entry.insert(value);
+                true
+            }
+        }
     }
 }
