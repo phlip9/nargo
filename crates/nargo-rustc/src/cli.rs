@@ -166,12 +166,19 @@ pub struct Args {
     pub(crate) features: String,
     pub(crate) target: String,
     pub(crate) build_script_dep: Option<PathBuf>,
-    pub(crate) deps: Vec<(String, PathBuf)>,
+    pub(crate) deps: Vec<Dep>,
 
     // envs
     pub(crate) src: PathBuf,
     pub(crate) out: PathBuf,
     pub(crate) version: semver::Version,
+}
+
+#[derive(Debug)] // TODO(phlip9): remove
+pub struct Dep {
+    pub(crate) dep_name: String,
+    pub(crate) crate_name: String,
+    pub(crate) out: PathBuf,
 }
 
 impl Args {
@@ -194,7 +201,7 @@ impl Args {
         let mut features: Option<String> = None;
         let mut target: Option<String> = None;
         let mut build_script_dep: Option<PathBuf> = None;
-        let mut deps: Vec<(String, PathBuf)> = Vec::new();
+        let mut deps: Vec<Dep> = Vec::new();
 
         let mut parser = lexopt::Parser::from_env();
         while let Some(arg) = parser.next()? {
@@ -236,9 +243,14 @@ impl Args {
                     build_script_dep = Some(PathBuf::from(parser.value()?));
                 }
                 Long("dep") => {
-                    let name = parser.value()?.string()?;
-                    let path = PathBuf::from(parser.value()?);
-                    deps.push((name, path));
+                    let dep_name = parser.value()?.string()?;
+                    let crate_name = parser.value()?.string()?;
+                    let out = PathBuf::from(parser.value()?);
+                    deps.push(Dep {
+                        dep_name,
+                        crate_name,
+                        out,
+                    });
                 }
 
                 _ => return Err(arg.unexpected()),

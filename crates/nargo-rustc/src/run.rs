@@ -23,7 +23,7 @@ pub(crate) struct BuildContext {
     profile: Profile,
     target_triple: String,
     build_script_dep: Option<PathBuf>,
-    deps: Vec<(String, PathBuf)>,
+    deps: Vec<Dep>,
     src: PathBuf,
     out: PathBuf,
 }
@@ -59,6 +59,17 @@ struct Profile {
     strip: String,
     // rustflags: profile_rustflags,
     // trim_paths,
+}
+
+struct Dep {
+    /// The dep's name in this crate's Cargo.toml.
+    dep_name: String,
+    /// The dep's original crate name.
+    crate_name: String,
+    /// The nix store path containing the dep's output artifacts.
+    out: PathBuf,
+    /// The relevant linkable libs we've discovered in the dep's out dir.
+    libs: Vec<String>,
 }
 
 impl BuildContext {
@@ -103,13 +114,15 @@ impl BuildContext {
             strip: "debuginfo".to_owned(),
         };
 
+        let deps = args.deps.into_iter().map(Dep::from_cli).collect();
+
         Self {
             pkg_name: args.pkg_name,
             target,
             profile,
             target_triple: args.target,
             build_script_dep: args.build_script_dep,
-            deps: args.deps,
+            deps,
             src: args.src,
             out: args.out,
         }
@@ -258,6 +271,9 @@ impl BuildContext {
         let metadata = self.out.file_name().unwrap().as_encoded_bytes();
         let metadata = str::from_utf8(&metadata[..8]).unwrap();
         cmd.arg(format!("-Cmetadata={metadata}"));
+        if self.target.uses_extra_filename() {
+            cmd.arg(format!("-Cextra-filename=-{metadata}"));
+        }
 
         if self.profile.rpath {
             cmd.arg("-Crpath");
@@ -275,16 +291,16 @@ impl BuildContext {
         // TODO(phlip9): proc-macro -> --extern proc_macro
         // TODO(phlip9): proc-macro -> -C prefer-dynamic
 
-        // deps: --extern <dep-name>=<lib-path>
+        // immediate deps: --extern <dep-name>=<lib-path>
         {
             let mut buf = OsString::new();
-            for (dep_name, lib_path) in &self.deps {
+            for dep in &self.deps {
                 cmd.arg("--extern");
 
                 buf.clear();
-                buf.push(OsStr::new(&dep_name.replace('-', "_")));
+                buf.push(OsStr::new(&dep.dep_name.replace('-', "_")));
                 buf.push(OsStr::new("="));
-                buf.push(lib_path.as_path().as_os_str());
+                buf.push(dep.lib_path());
                 cmd.arg(&buf);
             }
         }
@@ -444,14 +460,31 @@ impl BuildContext {
 //
 
 impl Target {
+    // fn is_lib(&self) -> bool {
+    //     self.kind == TargetKind::Lib
+    // }
+    //
+    // fn is_dylib(&self) -> bool {
+    //     self.is_lib()
+    //         && (self.crate_types.iter().any(|x| *x == CrateType::Dylib))
+    // }
+    //
+    // // TODO(phlip9): -C prefer-dynamic
+    // fn is_cdylib(&self) -> bool {
+    //     self.is_lib()
+    //         && (self.crate_types.iter().any(|x| *x == CrateType::Cdylib))
+    // }
+
     fn is_executable(&self) -> bool {
         matches!(self.kind, TargetKind::Bin | TargetKind::ExampleBin)
     }
 
-    // // TODO(phlip9): -C prefer-dynamic
-    // fn contains_dylib(&self) -> bool {
-    //     self.crate_types.iter().any(|t| *t == CrateType::Dylib)
-    // }
+    /// True if this target requires a `-C extra-filename=-{metadata-hash}` arg
+    fn uses_extra_filename(&self) -> bool {
+        // only lib targets
+        // TODO(phlip9): no (dylib or cdylib) && path dep
+        matches!(self.kind, TargetKind::Lib | TargetKind::ExampleLib)
+    }
 
     #[allow(dead_code)] // TODO(phlip9): remove
     fn requires_upstream_objects(&self) -> bool {
@@ -462,6 +495,61 @@ impl Target {
                 .any(CrateType::requires_upstream_objects),
             _ => true,
         }
+    }
+}
+
+//
+// --- impl Dep ---
+//
+
+impl Dep {
+    /// Read the dep's out dir for relevant .rlib, .so, ... output libs.
+    fn from_cli(dep: cli::Dep) -> Self {
+        let cli::Dep {
+            dep_name,
+            crate_name,
+            out,
+        } = dep;
+
+        let mut libs = Vec::new();
+
+        let dir_iter = std::fs::read_dir(out.as_path())
+            .expect("Failed to read dep directory");
+        for dir_entry in dir_iter {
+            let dir_entry = dir_entry.expect("Failed to read dep dir entry");
+            if !dir_entry.file_type().unwrap().is_file() {
+                continue;
+            }
+            let artifact = match dir_entry.file_name().into_string().ok() {
+                Some(s) => s,
+                None => continue,
+            };
+            if !artifact.contains(&crate_name) {
+                continue;
+            }
+
+            libs.push(artifact);
+        }
+
+        if libs.len() != 1 {
+            panic!(
+                "// TODO(phlip9): how to handle multiple output libs?\n\
+                 libs: {libs:?}"
+            );
+        }
+
+        Self {
+            dep_name,
+            crate_name,
+            out,
+            libs,
+        }
+    }
+
+    fn lib_path(&self) -> PathBuf {
+        // TODO(phlip9): how to handle multiple output libs?
+        let lib = self.libs.first().unwrap();
+        self.out.join(lib)
     }
 }
 

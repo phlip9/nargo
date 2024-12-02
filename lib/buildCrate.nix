@@ -36,19 +36,18 @@ pkgs.stdenv.mkDerivation {
       else ""
     } \
       ${
-      # --dep <dep-name> <value>/lib<crate-name>.<lib-ext>
+      # --dep <dep-name> <crate-name> <unit-drv>
       builtins.concatStringsSep " \\\n  "
       (builtins.map
         ({
           dep_name,
           crate_name,
-          lib_ext,
-          value,
-        }: "--dep ${dep_name} ${value}/lib${crate_name}.${lib_ext}")
+          # lib_ext,
+          unit,
+        }: "--dep ${dep_name} ${crate_name} ${unit}")
         target.deps)
     } \
       --target x86_64-unknown-linux-gnu
-
   '';
 
   passthru = {

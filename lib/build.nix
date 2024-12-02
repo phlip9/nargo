@@ -213,11 +213,11 @@
   _mkTargetDep = depName: unit: target: {
     crate_name = target.crate_name;
     dep_name = depName;
-    lib_ext =
-      # TODO(phlip9): dylib? cdylib?
-      if !target.is_proc_macro
-      then "rlib"
-      else "so";
-    value = unit;
+    # lib_ext =
+    #   # TODO(phlip9): dylib? cdylib?
+    #   if !target.is_proc_macro
+    #   then "rlib"
+    #   else "so";
+    unit = unit;
   };
 }
