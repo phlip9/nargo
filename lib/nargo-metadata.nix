@@ -64,6 +64,7 @@ craneLib.buildPackage rec {
     };
 
     built = build.build {
+      workspacePath = ../.;
       metadata = metadata;
       resolved = resolved;
       buildTarget = "x86_64-unknown-linux-gnu";

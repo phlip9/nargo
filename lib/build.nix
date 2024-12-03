@@ -6,6 +6,8 @@
   vendorCargoDep,
 }: rec {
   build = {
+    # Path to cargo workspace root directory.
+    workspacePath,
     # JSON-deserialized `Cargo.metadata.json`
     metadata,
     # The package set with all features resolved.
@@ -53,8 +55,14 @@
             # should have a pinned crates.io `hash` attr.
             else if (pkgMetadata ? hash)
             then (vendorCargoDep pkgMetadata)
-            # TODO(phlip9): workspace crate path
-            else ""; # throw "workspace crates not supported yet";
+            # Internal: place each workspace package into its own store path.
+            # Isolating each package is a prerequisite for perfect builds,
+            # otherwise touching one workspace crate will cause all others to
+            # also recompile.
+            else if !(pkgMetadata ? source)
+            then (_srcForWorkspacePkg workspacePath pkgId pkgMetadata)
+            #
+            else throw "nargo: error: unsure how to get crate source for package: ${pkgId}";
         in
           builtins.mapAttrs (
             featFor: resolvedPkgFeatFor: let
@@ -213,11 +221,31 @@
   _mkTargetDep = depName: unit: target: {
     crate_name = target.crate_name;
     dep_name = depName;
-    # lib_ext =
-    #   # TODO(phlip9): dylib? cdylib?
-    #   if !target.is_proc_macro
-    #   then "rlib"
-    #   else "so";
     unit = unit;
   };
+
+  # Vendor workspace packages into their own isolated store path. We need a
+  # little more granularity than just vendoring the whole package workspace path
+  # so we can handle workspaces with a top-level root package.
+  _srcForWorkspacePkg = workspacePath: pkgId: pkgMetadata: let
+    # "crates/nargo-metadata#0.1.0" -> "crates/nargo-metadata"
+    pkgWorkspaceRelPath = builtins.head (builtins.split "#" pkgId);
+    pkgWorkspacePath = workspacePath + "/${pkgWorkspaceRelPath}";
+
+    CargoToml = pkgWorkspacePath + "/Cargo.toml";
+    src = pkgWorkspacePath + "/src";
+    benches = pkgWorkspacePath + "/benches";
+    examples = pkgWorkspacePath + "/examples";
+    tests = pkgWorkspacePath + "/tests";
+  in
+    lib.fileset.toSource {
+      root = pkgWorkspacePath;
+      fileset = lib.fileset.unions [
+        CargoToml
+        src
+        (lib.fileset.maybeMissing benches)
+        (lib.fileset.maybeMissing examples)
+        (lib.fileset.maybeMissing tests)
+      ];
+    };
 }
