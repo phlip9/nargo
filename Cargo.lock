@@ -67,7 +67,6 @@ name = "nargo-rustc"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "lexopt",
  "nargo-core",
  "semver",
 ]

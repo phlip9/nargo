@@ -20,34 +20,30 @@ pkgs.stdenv.mkDerivation {
 
   phases = ["buildPhase"];
 
-  # TODO(phlip9): do we need -Cmetadata=XXXX and -Cextra-filename=-XXXX?
+  # TODO(phlip9): remove `concatStringsSep` and `null` check when moving to
+  # direct `derivation`.
+  env = {
+    BUILD_SCRIPT_DEP = let
+      build_script_dep = target.build_script_dep;
+    in
+      if build_script_dep == null
+      then ""
+      else build_script_dep;
+    CRATE_TYPE = builtins.concatStringsSep "," target.crate_types;
+    DEP_NAMES = builtins.concatStringsSep " " (builtins.map (dep: dep.dep_name) target.deps);
+    DEP_CRATE_NAMES = builtins.concatStringsSep " " (builtins.map (dep: dep.crate_name) target.deps);
+    DEP_PATHS = builtins.concatStringsSep " " (builtins.map (dep: dep.unit) target.deps);
+    EDITION = target.edition;
+    FEATURES = builtins.concatStringsSep "," (builtins.attrNames target.features);
+    KIND = target.kind;
+    PKG_NAME = pkgMetadata.name;
+    TARGET_NAME = target.name;
+    TARGET_PATH = target.path;
+    TARGET_TRIPLE = "x86_64-unknown-linux-gnu";
+  };
+
   buildPhase = ''
-    nargo-rustc \
-      --pkg-name "${pkgMetadata.name}" \
-      --kind "${target.kind}" \
-      --target-name "${target.name}" \
-      --crate-type "${builtins.concatStringsSep "," target.crate_types}" \
-      --path "${target.path}" \
-      --edition "${target.edition}" \
-      --features "${builtins.concatStringsSep "," (builtins.attrNames target.features)}" \
-      ${
-      if target.build_script_dep != null
-      then "--build-script-dep \"${target.build_script_dep}\""
-      else ""
-    } \
-      ${
-      # --dep <dep-name> <crate-name> <unit-drv>
-      builtins.concatStringsSep " \\\n  "
-      (builtins.map
-        ({
-          dep_name,
-          crate_name,
-          # lib_ext,
-          unit,
-        }: "--dep ${dep_name} ${crate_name} ${unit}")
-        target.deps)
-    } \
-      --target x86_64-unknown-linux-gnu
+    nargo-rustc
   '';
 
   passthru = {

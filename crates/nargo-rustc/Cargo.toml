@@ -8,5 +8,4 @@ edition.workspace = true
 nargo-core = { path = "../nargo-core" }
 
 anyhow.workspace = true
-lexopt.workspace = true
 semver.workspace = true

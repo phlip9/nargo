@@ -309,7 +309,6 @@
    "features": {},
    "deps": {
     "#anyhow@1.0.86": {"name":"anyhow","kinds":[{}]},
-    "#lexopt@0.3.0": {"name":"lexopt","kinds":[{"default":false}]},
     "#semver@1.0.23": {"name":"semver","kinds":[{}]},
     "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{}]}
    },

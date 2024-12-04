@@ -1,3 +1,4 @@
+pub mod env;
 pub mod fs;
 pub mod nargo;
 pub mod panic;

@@ -1,53 +1,3 @@
-// Goals:
-// 1. Keep each individual crate build .drv as small as possible
-//    -> Try to precompute, preaggregate, and amortize as much as possible
-//    -> pass common parameters as file? If some params are shared between all
-//       normal crates or build crates, then we can package them up into a file
-//       and just pass the one file to all crate drvs
-//    -> what is the threshold for pass inline vs pass as file? 128 B?
-
-// Plan:
-//
-// -> precompute base "build" and "normal" profile
-
-/*
-CARGO=/home/phlip9/.rustup/toolchains/nightly-2024-05-03-x86_64-unknown-linux-gnu/bin/cargo
-CARGO_CRATE_NAME=unicode_ident
-CARGO_MANIFEST_DIR=/home/phlip9/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicode-ident-1.0.12
-CARGO_PKG_AUTHORS='David Tolnay <dtolnay@gmail.com>'
-CARGO_PKG_DESCRIPTION='Determine whether characters have the XID_Start or XID_Continue properties according to Unicode Standard Annex #31'
-CARGO_PKG_HOMEPAGE=''
-CARGO_PKG_LICENSE='(MIT OR Apache-2.0) AND Unicode-DFS-2016'
-CARGO_PKG_LICENSE_FILE=''
-CARGO_PKG_NAME=unicode-ident
-CARGO_PKG_README=README.md
-CARGO_PKG_REPOSITORY='https://github.com/dtolnay/unicode-ident'
-CARGO_PKG_RUST_VERSION=1.31
-CARGO_PKG_VERSION=1.0.12
-CARGO_PKG_VERSION_MAJOR=1
-CARGO_PKG_VERSION_MINOR=0
-CARGO_PKG_VERSION_PATCH=12
-CARGO_PKG_VERSION_PRE=''
-CARGO_RUSTC_CURRENT_DIR=/home/phlip9/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicode-ident-1.0.12
-LD_LIBRARY_PATH='/home/phlip9/dev/nargo/target/release/deps:/home/phlip9/.rustup/toolchains/nightly-2024-05-03-x86_64-unknown-linux-gnu/lib'
-/home/phlip9/.rustup/toolchains/nightly-2024-05-03-x86_64-unknown-linux-gnu/bin/rustc
---crate-name unicode_ident
---edition=2018
-/home/phlip9/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicode-ident-1.0.12/src/lib.rs
---error-format=json
---json=diagnostic-rendered-ansi,artifacts,future-incompat
---crate-type lib
---emit=dep-info,metadata,link
--C embed-bitcode=no
--C debug-assertions=off
--C metadata=e690205d23816ca7
--C extra-filename=-e690205d23816ca7
---out-dir /home/phlip9/dev/nargo/target/release/deps
--C strip=debuginfo
--L dependency=/home/phlip9/dev/nargo/target/release/deps
---cap-lints warn
-*/
-
 /*
 anyhow-custom-build>
 
@@ -138,161 +88,193 @@ depsHostHostPropagated=
 _=/nix/store/57w1j7l0qm47qirpzv94d3qlmr6a9qj1-nargo-rustc-0.1.0/bin/nargo-rustc
 */
 
-use std::{env, path::PathBuf};
+use std::{
+    ffi::{OsStr, OsString},
+    path::Path,
+};
 
 use crate::run;
+use nargo_core::env;
 
-const HELP: &str = r#"
-nargo-rustc
-
-USAGE:
-  nargo-rustc [OPTIONS]
-
-OPTIONS:
-  TODO
-"#;
-
-const VERSION: &str =
-    concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"), "\n");
-
-#[derive(Debug)] // TODO(phlip9): remove
-pub struct Args {
-    // cli args
-    pub(crate) pkg_name: String,
-    pub(crate) kind: String,
-    pub(crate) target_name: String,
+pub struct ArgsRaw {
+    pub(crate) build_script_dep: OsString,
     pub(crate) crate_type: String,
-    pub(crate) path: PathBuf,
+    pub(crate) dep_crate_names: String,
+    pub(crate) dep_names: String,
+    pub(crate) dep_paths: OsString,
     pub(crate) edition: String,
     pub(crate) features: String,
-    pub(crate) target: String,
-    pub(crate) build_script_dep: Option<PathBuf>,
-    pub(crate) deps: Vec<Dep>,
+    pub(crate) kind: String,
+    pub(crate) out: OsString,
+    pub(crate) pkg_name: String,
+    pub(crate) src: OsString,
+    pub(crate) target_name: String,
+    pub(crate) target_path: OsString,
+    pub(crate) target_triple: String,
+    pub(crate) version: String,
+}
 
-    // envs
-    pub(crate) src: PathBuf,
-    pub(crate) out: PathBuf,
+#[derive(Debug)] // TODO(phlip9): remove
+pub struct Args<'a> {
+    pub(crate) build_script_dep: Option<&'a Path>,
+    pub(crate) crate_type: &'a str,
+    pub(crate) deps: Vec<Dep<'a>>,
+    pub(crate) edition: &'a str,
+    pub(crate) features: &'a str,
+    pub(crate) kind: &'a str,
+    pub(crate) out: &'a Path,
+    pub(crate) pkg_name: &'a str,
+    pub(crate) src: &'a Path,
+    pub(crate) target_name: &'a str,
+    pub(crate) target_path: &'a Path,
+    pub(crate) target_triple: &'a str,
     pub(crate) version: semver::Version,
 }
 
 #[derive(Debug)] // TODO(phlip9): remove
-pub struct Dep {
-    pub(crate) dep_name: String,
-    pub(crate) crate_name: String,
-    pub(crate) out: PathBuf,
+pub struct Dep<'a> {
+    pub(crate) crate_name: &'a str,
+    pub(crate) dep_name: &'a str,
+    pub(crate) out: &'a Path,
 }
 
-impl Args {
-    pub fn from_env() -> Result<Self, lexopt::Error> {
-        use lexopt::prelude::*;
-
-        // eprintln!("\n\nenvs:\n");
-        // for (key, var) in std::env::vars() {
-        //     eprintln!("  {key}={var}");
-        // }
-
-        // CLI args
-
-        let mut pkg_name: Option<String> = None;
-        let mut kind: Option<String> = None;
-        let mut target_name: Option<String> = None;
-        let mut crate_type: Option<String> = None;
-        let mut path: Option<PathBuf> = None;
-        let mut edition: Option<String> = None;
-        let mut features: Option<String> = None;
-        let mut target: Option<String> = None;
-        let mut build_script_dep: Option<PathBuf> = None;
-        let mut deps: Vec<Dep> = Vec::new();
-
-        let mut parser = lexopt::Parser::from_env();
-        while let Some(arg) = parser.next()? {
-            match arg {
-                Short('h') | Long("help") => {
-                    print!("{}", HELP);
-                    std::process::exit(0);
-                }
-                Short('V') | Long("version") => {
-                    print!("{}", VERSION);
-                    std::process::exit(0);
-                }
-
-                Long("pkg-name") if pkg_name.is_none() => {
-                    pkg_name = Some(parser.value()?.string()?);
-                }
-                Long("kind") if kind.is_none() => {
-                    kind = Some(parser.value()?.string()?);
-                }
-                Long("target-name") if target_name.is_none() => {
-                    target_name = Some(parser.value()?.string()?);
-                }
-                Long("crate-type") if crate_type.is_none() => {
-                    crate_type = Some(parser.value()?.string()?);
-                }
-                Long("path") if path.is_none() => {
-                    path = Some(PathBuf::from(parser.value()?));
-                }
-                Long("edition") if edition.is_none() => {
-                    edition = Some(parser.value()?.string()?);
-                }
-                Long("features") if features.is_none() => {
-                    features = Some(parser.value()?.string()?);
-                }
-                Long("target") if target.is_none() => {
-                    target = Some(parser.value()?.string()?);
-                }
-                Long("build-script-dep") if build_script_dep.is_none() => {
-                    build_script_dep = Some(PathBuf::from(parser.value()?));
-                }
-                Long("dep") => {
-                    let dep_name = parser.value()?.string()?;
-                    let crate_name = parser.value()?.string()?;
-                    let out = PathBuf::from(parser.value()?);
-                    deps.push(Dep {
-                        dep_name,
-                        crate_name,
-                        out,
-                    });
-                }
-
-                _ => return Err(arg.unexpected()),
-            }
+impl ArgsRaw {
+    pub fn from_env() -> Self {
+        Self {
+            build_script_dep: env::var_os("BUILD_SCRIPT_DEP").unwrap(),
+            crate_type: env::var("CRATE_TYPE").unwrap(),
+            dep_names: env::var("DEP_NAMES").unwrap(),
+            dep_crate_names: env::var("DEP_CRATE_NAMES").unwrap(),
+            dep_paths: env::var_os("DEP_PATHS").unwrap(),
+            edition: env::var("EDITION").unwrap(),
+            features: env::var("FEATURES").unwrap(),
+            kind: env::var("KIND").unwrap(),
+            out: env::var_os("out").unwrap(),
+            pkg_name: env::var("PKG_NAME").unwrap(),
+            src: env::var_os("src").unwrap(),
+            target_name: env::var("TARGET_NAME").unwrap(),
+            target_path: env::var_os("TARGET_PATH").unwrap(),
+            target_triple: env::var("TARGET_TRIPLE").unwrap(),
+            version: env::var("version").unwrap(),
         }
+    }
 
-        // Env vars
+    /// Clear all nargo-specific envs.
+    ///
+    /// # Safety
+    ///
+    /// [`std::env::remove_var`] is not thread-safe. You must call this before
+    /// spawning any threads.
+    pub unsafe fn remove_nargo_envs() {
+        const REMOVE_ENVS: &[&str] = &[
+            "BUILD_SCRIPT_DEP",
+            "CRATE_TYPE",
+            "DEP_NAMES",
+            "DEP_CRATE_NAMES",
+            "DEP_PATHS",
+            "EDITION",
+            "FEATURES",
+            "KIND",
+            "out",
+            "PKG_NAME",
+            "src",
+            "TARGET_NAME",
+            "TARGET_PATH",
+            "TARGET_TRIPLE",
+            "version",
+        ];
 
-        let src = PathBuf::from(
-            env::var_os("src").ok_or("missing `src` directory env")?,
-        );
-        let out = PathBuf::from(
-            env::var_os("out").ok_or("missing `out` directory env")?,
-        );
-        let version = semver::Version::parse(
-            &env::var("version").map_err(|_| "missing `version` env")?,
-        )
-        .map_err(|err| {
-            format!("`version` env is not a valid semver version: {err}")
-        })?;
+        for env in REMOVE_ENVS {
+            std::env::remove_var(env);
+        }
+    }
+}
 
-        Ok(Args {
-            pkg_name: pkg_name.ok_or("missing --pkg-name")?,
-            kind: kind.ok_or("missing --kind")?,
-            target_name: target_name.ok_or("missing --target-name")?,
-            crate_type: crate_type.ok_or("missing --crate-type")?,
-            path: path.ok_or("missing --path")?,
-            edition: edition.ok_or("missing --edition")?,
-            features: features.ok_or("missing --features")?,
-            target: target.ok_or("missing --target")?,
+impl<'a> Args<'a> {
+    pub fn from_raw(args: &'a ArgsRaw) -> Self {
+        let build_script_dep = if args.build_script_dep.is_empty() {
+            None
+        } else {
+            Some(Path::new(&args.build_script_dep))
+        };
+
+        let version = args.version.as_str();
+        let version = semver::Version::parse(version)
+            .map_err(|err| {
+                format!("version env ({version}) is not valid semver: {err}")
+            })
+            .unwrap();
+
+        Self {
             build_script_dep,
-            deps,
-            src,
-            out,
+            crate_type: &args.crate_type,
+            deps: parse_deps(
+                &args.dep_names,
+                &args.dep_crate_names,
+                &args.dep_paths,
+            ),
+            edition: &args.edition,
+            features: &args.features,
+            kind: &args.kind,
+            out: Path::new(&args.out),
+            pkg_name: &args.pkg_name,
+            src: Path::new(&args.src),
+            target_name: &args.target_name,
+            target_path: Path::new(&args.target_path),
+            target_triple: &args.target_triple,
             version,
-        })
+        }
     }
 
     pub fn run(self) {
         eprintln!("args: {self:#?}");
 
         run::BuildContext::from_args(self).run()
+    }
+}
+
+fn parse_deps<'a>(
+    dep_names: &'a str,
+    dep_crate_names: &'a str,
+    dep_paths: &'a OsStr,
+) -> Vec<Dep<'a>> {
+    if dep_names.is_empty()
+        && dep_crate_names.is_empty()
+        && dep_paths.is_empty()
+    {
+        return Vec::new();
+    }
+
+    assert!(
+        !dep_names.is_empty()
+            && !dep_crate_names.is_empty()
+            && !dep_paths.is_empty()
+    );
+
+    let mut dep_names = dep_names.split(' ');
+    let mut dep_crate_names = dep_crate_names.split(' ');
+    let mut dep_paths = dep_paths.as_encoded_bytes().split(|b| *b == b' ');
+
+    let mut deps = Vec::new();
+
+    loop {
+        match (dep_names.next(), dep_crate_names.next(), dep_paths.next()) {
+            (Some(dep_name), Some(crate_name), Some(path)) => {
+                #[cfg(unix)]
+                let path =
+                    <OsStr as std::os::unix::ffi::OsStrExt>::from_bytes(path);
+
+                #[cfg(not(unix))]
+                let path = todo!();
+
+                deps.push(Dep {
+                    dep_name,
+                    crate_name,
+                    out: Path::new(path),
+                });
+            }
+            (None, None, None) => break deps,
+            _ => panic!("DEP_NAMES, DEP_CRATE_NAMES, and DEP_PATHS are uneven"),
+        };
     }
 }

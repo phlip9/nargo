@@ -83,7 +83,7 @@ impl BuildContext {
             .map(CrateType::from_str)
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
-        let kind = TargetKind::from_str(&args.kind).unwrap();
+        let kind = TargetKind::from_str(args.kind).unwrap();
         let features = if args.features.is_empty() {
             Vec::new()
         } else {
@@ -91,14 +91,14 @@ impl BuildContext {
         };
 
         let target = Target {
-            name: args.target_name,
+            name: args.target_name.to_owned(),
             version: args.version,
             kind,
             crate_name,
             crate_types,
-            crate_types_str: args.crate_type,
-            path: args.path,
-            edition: args.edition,
+            crate_types_str: args.crate_type.to_owned(),
+            path: args.target_path.to_owned(),
+            edition: args.edition.to_owned(),
             features,
         };
 
@@ -122,14 +122,14 @@ impl BuildContext {
         );
 
         Self {
-            pkg_name: args.pkg_name,
+            pkg_name: args.pkg_name.to_owned(),
             target,
             profile,
-            target_triple: args.target,
-            build_script_dep: args.build_script_dep,
+            target_triple: args.target_triple.to_owned(),
+            build_script_dep: args.build_script_dep.map(PathBuf::from),
             deps,
-            src: args.src,
-            out: args.out,
+            src: args.src.to_owned(),
+            out: args.out.to_owned(),
         }
     }
 
@@ -689,8 +689,8 @@ impl Dep {
 
         let mut libs = Vec::new();
 
-        let dir_iter = std::fs::read_dir(out.as_path())
-            .expect("Failed to read dep directory");
+        let dir_iter =
+            std::fs::read_dir(out).expect("Failed to read dep directory");
         for dir_entry in dir_iter {
             let dir_entry = dir_entry.expect("Failed to read dep dir entry");
             if !dir_entry.file_type().unwrap().is_file() {
@@ -700,7 +700,7 @@ impl Dep {
                 Some(s) => s,
                 None => continue,
             };
-            if !artifact.contains(&crate_name) {
+            if !artifact.contains(crate_name) {
                 continue;
             }
 
@@ -715,9 +715,9 @@ impl Dep {
         }
 
         Self {
-            dep_name,
-            crate_name,
-            out,
+            dep_name: dep_name.to_owned(),
+            crate_name: crate_name.to_owned(),
+            out: out.to_owned(),
             libs,
         }
     }
