@@ -30,12 +30,10 @@ pub(crate) struct BuildContext {
 }
 
 struct Target {
-    #[allow(dead_code)] // TODO(phlip9): remove
     name: String,
     version: semver::Version,
     kind: TargetKind,
     crate_name: String,
-    #[allow(dead_code)] // TODO(phlip9): remove
     crate_types: Vec<CrateType>,
     crate_types_str: String,
     path: PathBuf,
@@ -43,15 +41,16 @@ struct Target {
     features: Vec<String>,
 }
 
-#[allow(dead_code)] // TODO(phlip9): remove
 struct Profile {
     name: String,
     opt_level: char,
+    #[allow(dead_code)] // TODO(phlip9): remove
     lto: String,
     // codegen_backend,
     codegen_units: Option<u32>,
     debuginfo: String,
     debug_assertions: bool,
+    #[allow(dead_code)] // TODO(phlip9): remove
     split_debuginfo: Option<String>,
     overflow_checks: bool,
     rpath: bool,
