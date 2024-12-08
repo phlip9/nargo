@@ -97,21 +97,6 @@ impl<'a> Version<'a> {
             build,
         })
     }
-
-    // TODO(phlip9): remove
-    pub(crate) fn leak(&self) -> Version<'static> {
-        fn box_leak_str(s: &str) -> &'static str {
-            Box::leak(Box::<str>::from(s))
-        }
-        Version {
-            original: box_leak_str(self.original),
-            major: box_leak_str(self.major),
-            minor: box_leak_str(self.minor),
-            patch: box_leak_str(self.patch),
-            pre: self.pre.map(box_leak_str),
-            build: self.build.map(box_leak_str),
-        }
-    }
 }
 
 // <numeric> ::= "0"

@@ -2,6 +2,7 @@
 
 use core::str;
 use std::{
+    borrow::Cow,
     collections::BTreeMap,
     ffi::{OsStr, OsString},
     fs::File,
@@ -20,66 +21,70 @@ use crate::{
     build_script::BuildOutput, cli, semver, shell, target_cfg::RustcTargetCfg,
 };
 
-pub(crate) struct BuildContext {
-    pkg_name: String,
-    target: Target,
-    profile: Profile,
-    target_triple: String,
-    host_profile: Option<Profile>,
-    host_target_triple: Option<String>,
-    build_script_dep: Option<PathBuf>,
-    deps: Vec<Dep>,
-    src: PathBuf,
-    out: PathBuf,
+pub(crate) struct BuildContext<'a> {
+    pkg_name: &'a str,
+    target: Target<'a>,
+    profile: Profile<'a>,
+    target_triple: &'a str,
+    host_profile: Option<Profile<'a>>,
+    host_target_triple: Option<&'a str>,
+    build_script_dep: Option<&'a Path>,
+    deps: Vec<Dep<'a>>,
+    src: &'a Path,
+    out: &'a Path,
 }
 
-struct Target {
-    name: String,
-    version: semver::Version<'static>,
+struct Target<'a> {
+    name: &'a str,
+    version: semver::Version<'a>,
     kind: TargetKind,
-    crate_name: String,
+    crate_name: Cow<'a, str>,
     crate_types: Vec<CrateType>,
-    crate_types_str: String,
-    path: PathBuf,
-    edition: String,
-    features: Vec<String>,
+    crate_types_str: &'a str,
+    path: &'a Path,
+    edition: &'a str,
+    features: Vec<&'a str>,
 }
 
-struct Profile {
-    name: String,
+struct Profile<'a> {
+    name: &'a str,
     opt_level: char,
     #[allow(dead_code)] // TODO(phlip9): remove
-    lto: String,
+    lto: &'a str,
     // codegen_backend,
     codegen_units: Option<u32>,
-    debuginfo: String,
+    debuginfo: &'a str,
     debug_assertions: bool,
     #[allow(dead_code)] // TODO(phlip9): remove
-    split_debuginfo: Option<String>,
+    split_debuginfo: Option<&'a str>,
     overflow_checks: bool,
     rpath: bool,
     panic: &'static str,
     // incremental,
-    strip: String,
+    strip: &'a str,
     // rustflags: profile_rustflags,
     // trim_paths,
 }
 
-struct Dep {
+struct Dep<'a> {
     /// The dep's name in this crate's Cargo.toml.
-    dep_name: String,
+    dep_name: &'a str,
     /// The dep's original crate name.
     #[allow(dead_code)] // TODO(phlip9): remove
-    crate_name: String,
+    crate_name: &'a str,
     /// The nix store path containing the dep's output artifacts.
-    out: PathBuf,
+    out: &'a Path,
     /// The relevant linkable libs we've discovered in the dep's out dir.
     libs: Vec<String>,
 }
 
-impl BuildContext {
-    pub(crate) fn from_args(args: cli::Args) -> Self {
-        let crate_name = args.target_name.replace('-', "_").to_owned();
+impl<'a> BuildContext<'a> {
+    pub(crate) fn from_args(args: cli::Args<'a>) -> Self {
+        let crate_name = if args.target_name.contains('-') {
+            Cow::Owned(args.target_name.replace('-', "_"))
+        } else {
+            Cow::Borrowed(args.target_name)
+        };
         let crate_types = args
             .crate_type
             .split(',')
@@ -90,53 +95,52 @@ impl BuildContext {
         let features = if args.features.is_empty() {
             Vec::new()
         } else {
-            args.features.split(',').map(String::from).collect()
+            args.features.split(',').collect()
         };
 
         let target = Target {
-            name: args.target_name.to_owned(),
-            version: args.version.leak(),
+            name: args.target_name,
+            version: args.version,
             kind,
             crate_name,
             crate_types,
-            crate_types_str: args.crate_type.to_owned(),
-            path: args.target_path.to_owned(),
-            edition: args.edition.to_owned(),
+            crate_types_str: args.crate_type,
+            path: args.target_path,
+            edition: args.edition,
             features,
         };
 
         let profile = Profile {
-            name: "debug".to_owned(),
+            name: "debug",
             opt_level: '1',
-            lto: "off".to_owned(),
+            lto: "off",
             codegen_units: None,
-            debuginfo: "0".to_owned(),
+            debuginfo: "0",
             debug_assertions: true,
             split_debuginfo: None,
             overflow_checks: true,
             rpath: false,
             panic: "abort",
-            strip: "debuginfo".to_owned(),
+            strip: "debuginfo",
         };
 
         // We need the build profile (nix "build", cargo "host") only when
         // _building_ the `build_script_build` binary.
-        let host_profile = target.is_custom_build().then(|| Profile {
-            name: "debug".to_owned(),
+        let host_profile = target.is_custom_build().then_some(Profile {
+            name: "debug",
             opt_level: '0',
-            lto: "off".to_owned(),
+            lto: "off",
             codegen_units: None,
-            debuginfo: "0".to_owned(),
+            debuginfo: "0",
             debug_assertions: true,
             split_debuginfo: None,
             overflow_checks: true,
             rpath: false,
             panic: "unwind",
-            strip: "debuginfo".to_owned(),
+            strip: "debuginfo",
         });
-        let host_target_triple = target
-            .is_custom_build()
-            .then(|| args.target_triple.to_owned());
+        let host_target_triple =
+            target.is_custom_build().then_some(args.target_triple);
 
         let deps = time!(
             "read direct deps",
@@ -144,21 +148,21 @@ impl BuildContext {
         );
 
         Self {
-            pkg_name: args.pkg_name.to_owned(),
+            pkg_name: args.pkg_name,
             target,
             host_profile,
             host_target_triple,
             profile,
-            target_triple: args.target_triple.to_owned(),
-            build_script_dep: args.build_script_dep.map(PathBuf::from),
+            target_triple: args.target_triple,
+            build_script_dep: args.build_script_dep,
             deps,
-            src: args.src.to_owned(),
-            out: args.out.to_owned(),
+            src: args.src,
+            out: args.out,
         }
     }
 
     pub(crate) fn run(&self) {
-        fs::create_dir(&self.out).expect("mkdir");
+        fs::create_dir(self.out).expect("mkdir");
 
         // Collect transitive deps into `$out/deps` so `rustc` can find them.
         let tdep_lib_filenames =
@@ -192,7 +196,7 @@ impl BuildContext {
 
         // format!("{src}=/build/{pkg_name}-{version}")
         let remap = {
-            let mut remap = self.src.clone().into_os_string();
+            let mut remap = self.src.as_os_str().to_owned();
             let remap_to = Path::new("/build")
                 .join(format!("{}-{}", self.pkg_name, self.target.version));
             remap.push("=");
@@ -200,7 +204,7 @@ impl BuildContext {
             remap
         };
 
-        let target_path = self.src.join(&self.target.path);
+        let target_path = self.src.join(self.target.path);
         let profile = if self.target.is_custom_build() {
             self.host_profile.as_ref().unwrap()
         } else {
@@ -213,10 +217,10 @@ impl BuildContext {
         };
 
         let mut cmd = Command::new("rustc");
-        cmd.current_dir(&self.src);
+        cmd.current_dir(self.src);
         cmd.args(["--crate-name", &self.target.crate_name])
-            .args(["--crate-type", &self.target.crate_types_str])
-            .args(["--edition", &self.target.edition])
+            .args(["--crate-type", self.target.crate_types_str])
+            .args(["--edition", self.target.edition])
             .args([OsStr::new("--remap-path-prefix"), &remap])
             .args([OsStr::new("--out-dir"), self.out.as_os_str()])
             .args(["--target", target_triple])
@@ -413,11 +417,11 @@ impl BuildContext {
         cmd.arg(target_path);
 
         // envs
-        cmd.env("CARGO_CRATE_NAME", &self.target.crate_name)
-            .env("CARGO_MANIFEST_DIR", &self.src);
+        cmd.env("CARGO_CRATE_NAME", self.target.crate_name.as_ref())
+            .env("CARGO_MANIFEST_DIR", self.src);
 
         if self.target.is_executable() {
-            cmd.env("CARGO_BIN_NAME", &self.target.name);
+            cmd.env("CARGO_BIN_NAME", self.target.name);
         }
 
         // TODO(phlip9): set `CARGO_BIN_EXE_` env for tests and benches
@@ -450,11 +454,12 @@ impl BuildContext {
         // custom-build targets.
         let rustc_target_cfgs = time!(
             "rustc --print cfg",
-            RustcTargetCfg::collect(&self.target_triple)
+            RustcTargetCfg::collect(self.target_triple)
         );
 
-        let mut cmd = Command::new(self.out.join(&self.target.crate_name));
-        cmd.current_dir(&self.src)
+        let mut cmd =
+            Command::new(self.out.join(self.target.crate_name.as_ref()));
+        cmd.current_dir(self.src)
             .stdout(File::create(self.out.join("output")).expect("$out/output"))
             .stderr(
                 File::create(self.out.join("stderr")).expect("$out/stderr"),
@@ -471,16 +476,16 @@ impl BuildContext {
             .env("CARGO_CFG_PANIC", profile.panic)
             .env("CARGO_ENCODED_RUSTFLAGS", "")
             .env("CARGO_MAKEFLAGS", "") // TODO
-            .env("CARGO_MANIFEST_DIR", &self.src) // TODO(phlip9): incorrect for workspace
+            .env("CARGO_MANIFEST_DIR", self.src) // TODO(phlip9): incorrect for workspace
             .env("CARGO_MANIFEST_LINKS", "") // TODO
             .env("DEBUG", debug.to_string())
             .env("HOST", self.host_target_triple.as_ref().unwrap())
             .env("OPT_LEVEL", profile.opt_level.to_string())
             .env("OUT_DIR", &out_dir)
-            .env("PROFILE", &profile.name) // TODO(phlip9): should be base?
+            .env("PROFILE", profile.name) // TODO(phlip9): should be base?
             .env("RUSTC", "rustc")
             .env("RUSTDOC", "rustdoc")
-            .env("TARGET", &self.target_triple);
+            .env("TARGET", self.target_triple);
 
         // rustc target cfg envs
         rustc_target_cfgs.env_cfgs(|env_key, env_value| {
@@ -569,7 +574,7 @@ impl BuildContext {
         for (tdep_lib_filename, dep) in &tdep_lib_filenames {
             // link_src = "${dep.out}/deps/${tdep_lib_filename}"
             link_src.clear();
-            link_src.as_mut_os_string().push(&dep.out);
+            link_src.as_mut_os_string().push(dep.out);
             link_src.push("deps");
             link_src.push(tdep_lib_filename);
 
@@ -577,7 +582,7 @@ impl BuildContext {
 
             // link_dst = "${out}/deps/${tdep_lib_filename}"
             link_dst.clear();
-            link_dst.as_mut_os_string().push(&self.out);
+            link_dst.as_mut_os_string().push(self.out);
             link_dst.push("deps");
             link_dst.push(tdep_lib_filename);
 
@@ -617,12 +622,12 @@ impl BuildContext {
 
             // link_src = "${dep.out}/${dep_lib}"
             target.clear();
-            target.as_mut_os_string().push(&dep.out);
+            target.as_mut_os_string().push(dep.out);
             target.push(dep_lib);
 
             // link_dst = "${out}/deps/${dep_lib}"
             symlink.clear();
-            symlink.as_mut_os_string().push(&self.out);
+            symlink.as_mut_os_string().push(self.out);
             symlink.push("deps");
             symlink.push(dep_lib);
 
@@ -636,7 +641,7 @@ impl BuildContext {
 // --- impl Target ---
 //
 
-impl Target {
+impl<'a> Target<'a> {
     fn is_lib(&self) -> bool {
         self.kind == TargetKind::Lib
     }
@@ -700,9 +705,9 @@ impl Target {
 // --- impl Dep ---
 //
 
-impl Dep {
+impl<'a> Dep<'a> {
     /// Read the dep's out dir for relevant .rlib, .so, ... output libs.
-    fn from_cli(dep: cli::Dep) -> Self {
+    fn from_cli(dep: cli::Dep<'a>) -> Self {
         let cli::Dep {
             dep_name,
             crate_name,
@@ -737,9 +742,9 @@ impl Dep {
         }
 
         Self {
-            dep_name: dep_name.to_owned(),
-            crate_name: crate_name.to_owned(),
-            out: out.to_owned(),
+            dep_name,
+            crate_name,
+            out,
             libs,
         }
     }
@@ -822,7 +827,7 @@ impl CommandExt for Command {
             .env("CARGO_PKG_HOMEPAGE", "") // TODO
             .env("CARGO_PKG_LICENSE", "") // TODO
             .env("CARGO_PKG_LICENSE_FILE", "") // TODO
-            .env("CARGO_PKG_NAME", &ctx.pkg_name)
+            .env("CARGO_PKG_NAME", ctx.pkg_name)
             .env("CARGO_PKG_README", "") // TODO
             .env("CARGO_PKG_REPOSITORY", "") // TODO
             .env("CARGO_PKG_RUST_VERSION", "") // TODO
