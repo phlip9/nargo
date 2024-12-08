@@ -16,13 +16,17 @@ use nargo_core::{
     time,
 };
 
-use crate::{build_script::BuildOutput, cli, shell};
+use crate::{
+    build_script::BuildOutput, cli, shell, target_cfg::RustcTargetCfg,
+};
 
 pub(crate) struct BuildContext {
     pkg_name: String,
     target: Target,
     profile: Profile,
     target_triple: String,
+    host_profile: Option<Profile>,
+    host_target_triple: Option<String>,
     build_script_dep: Option<PathBuf>,
     deps: Vec<Dep>,
     src: PathBuf,
@@ -115,6 +119,25 @@ impl BuildContext {
             strip: "debuginfo".to_owned(),
         };
 
+        // We need the build profile (nix "build", cargo "host") only when
+        // _building_ the `build_script_build` binary.
+        let host_profile = target.is_custom_build().then(|| Profile {
+            name: "debug".to_owned(),
+            opt_level: '0',
+            lto: "off".to_owned(),
+            codegen_units: None,
+            debuginfo: "0".to_owned(),
+            debug_assertions: true,
+            split_debuginfo: None,
+            overflow_checks: true,
+            rpath: false,
+            panic: "unwind",
+            strip: "debuginfo".to_owned(),
+        });
+        let host_target_triple = target
+            .is_custom_build()
+            .then(|| args.target_triple.to_owned());
+
         let deps = time!(
             "read direct deps",
             args.deps.into_iter().map(Dep::from_cli).collect()
@@ -123,6 +146,8 @@ impl BuildContext {
         Self {
             pkg_name: args.pkg_name.to_owned(),
             target,
+            host_profile,
+            host_target_triple,
             profile,
             target_triple: args.target_triple.to_owned(),
             build_script_dep: args.build_script_dep.map(PathBuf::from),
@@ -143,7 +168,7 @@ impl BuildContext {
         self.run_rustc();
 
         // For `build.rs` scripts, we also run the `build_script_build`
-        if self.is_custom_build() {
+        if self.target.is_custom_build() {
             self.run_build_script();
         }
 
@@ -176,6 +201,16 @@ impl BuildContext {
         };
 
         let target_path = self.src.join(&self.target.path);
+        let profile = if self.target.is_custom_build() {
+            self.host_profile.as_ref().unwrap()
+        } else {
+            &self.profile
+        };
+        let target_triple = if self.target.is_custom_build() {
+            self.host_target_triple.as_ref().unwrap()
+        } else {
+            &self.target_triple
+        };
 
         let mut cmd = Command::new("rustc");
         cmd.current_dir(&self.src);
@@ -184,7 +219,7 @@ impl BuildContext {
             .args(["--edition", &self.target.edition])
             .args([OsStr::new("--remap-path-prefix"), &remap])
             .args([OsStr::new("--out-dir"), self.out.as_os_str()])
-            .args(["--target", &self.target_triple])
+            .args(["--target", target_triple])
             .arg("--error-format=human")
             .arg("--diagnostic-width=80")
             .arg("--cap-lints=allow");
@@ -210,13 +245,13 @@ impl BuildContext {
         }
 
         // -C opt-level={}
-        if self.profile.opt_level != '0' {
-            cmd.arg(format!("-Copt-level={}", self.profile.opt_level));
+        if profile.opt_level != '0' {
+            cmd.arg(format!("-Copt-level={}", profile.opt_level));
         }
 
         // -C panic={}
-        if self.profile.panic != "unwind" {
-            cmd.arg(format!("-Cpanic={}", self.profile.panic));
+        if profile.panic != "unwind" {
+            cmd.arg(format!("-Cpanic={}", profile.panic));
         }
 
         // TODO(phlip9): LTO
@@ -224,16 +259,16 @@ impl BuildContext {
 
         // TODO(phlip9): codegen backend
 
-        if let Some(codegen_units) = self.profile.codegen_units {
+        if let Some(codegen_units) = profile.codegen_units {
             cmd.arg(format!("-Ccodegen-units={codegen_units}"));
         }
 
         // TODO(phlip9): debuginfo newtype
-        if self.profile.debuginfo != "0" {
-            cmd.arg(format!("-Cdebuginfo={}", self.profile.debuginfo));
+        if profile.debuginfo != "0" {
+            cmd.arg(format!("-Cdebuginfo={}", profile.debuginfo));
 
             // TODO(phlip9): check if target platform supports split debuginfo
-            // if let Some(split_debuginfo) = &self.profile.split_debuginfo {
+            // if let Some(split_debuginfo) = &profile.split_debuginfo {
             //
             // }
         }
@@ -243,9 +278,9 @@ impl BuildContext {
         // `-C overflow-checks` is implied by the setting of `-C debug-assertions`,
         // so we only need to provide `-C overflow-checks` if it differs from
         // the value of `-C debug-assertions` we would provide.
-        let opt_level = self.profile.opt_level;
-        let debug_assertions = self.profile.debug_assertions;
-        let overflow_checks = self.profile.overflow_checks;
+        let opt_level = profile.opt_level;
+        let debug_assertions = profile.debug_assertions;
+        let overflow_checks = profile.overflow_checks;
         if opt_level != '0' {
             if debug_assertions {
                 cmd.arg("-Cdebug-assertions=on");
@@ -302,14 +337,14 @@ impl BuildContext {
             cmd.arg(format!("-Cextra-filename=-{metadata}"));
         }
 
-        if self.profile.rpath {
+        if profile.rpath {
             cmd.arg("-Crpath");
         }
 
         // TODO(phlip9): -C linker={}
 
-        if self.profile.strip != "none" {
-            cmd.arg(format!("-Cstrip={}", self.profile.strip));
+        if profile.strip != "none" {
+            cmd.arg(format!("-Cstrip={}", profile.strip));
         }
 
         // TODO(phlip9): handle build std
@@ -410,6 +445,14 @@ impl BuildContext {
         //
         // TODO(phlip9): faithfully impl <src/cargo/core/compiler/custom_build.rs>
 
+        // Query `rustc` for the cfgs it sets for this target triple. ~17 ms.
+        // TODO(phlip9): cache this in a separate drv and pass in only to
+        // custom-build targets.
+        let rustc_target_cfgs = time!(
+            "rustc --print cfg",
+            RustcTargetCfg::collect(&self.target_triple)
+        );
+
         let mut cmd = Command::new(self.out.join(&self.target.crate_name));
         cmd.current_dir(&self.src)
             .stdout(File::create(self.out.join("output")).expect("$out/output"))
@@ -420,49 +463,29 @@ impl BuildContext {
         let out_dir = self.out.join("out");
         fs::create_dir(&out_dir).expect("create_dir");
 
-        cmd.env("CARGO", "") // TODO
-            .env("CARGO_MANIFEST_DIR", &self.src)
-            .env("CARGO_MANIFEST_LINKS", "") // TODO
-            .env("CARGO_MAKEFLAGS", "") // TODO
-            .env("OUT_DIR", &out_dir);
-
-        // cfg envs
-        // TODO(phlip9): need to pass in
-        cmd.env("CARGO_CFG_OVERFLOW_CHECKS", "")
-            .env("CARGO_CFG_PANIC", "abort")
-            .env("CARGO_CFG_RELOCATION_MODEL", "pic")
-            .env("CARGO_CFG_TARGET_ABI", "")
-            .env("CARGO_CFG_TARGET_ARCH", "x86_64")
-            .env("CARGO_CFG_TARGET_ENDIAN", "little")
-            .env("CARGO_CFG_TARGET_ENV", "gnu")
-            .env("CARGO_CFG_TARGET_FAMILY", "unix")
-            .env("CARGO_CFG_TARGET_FEATURE", "fxsr,sse,sse2")
-            .env("CARGO_CFG_TARGET_HAS_ATOMIC", "16,32,64,8,ptr")
-            .env(
-                "CARGO_CFG_TARGET_HAS_ATOMIC_EQUAL_ALIGNMENT",
-                "16,32,64,8,ptr",
-            )
-            .env("CARGO_CFG_TARGET_HAS_ATOMIC_LOAD_STORE", "16,32,64,8,ptr")
-            .env("CARGO_CFG_TARGET_OS", "linux")
-            .env("CARGO_CFG_TARGET_POINTER_WIDTH", "64")
-            .env("CARGO_CFG_TARGET_THREAD_LOCAL", "")
-            .env("CARGO_CFG_TARGET_VENDOR", "unknown")
-            .env("CARGO_CFG_UB_CHECKS", "")
-            .env("CARGO_CFG_UNIX", "")
-            .env("CARGO_ENCODED_RUSTFLAGS", "")
-            .env("HOST", "x86_64-unknown-linux-gnu")
-            .env("RUSTC", "rustc")
-            .env("RUSTDOC", "rustdoc")
-            .env("TARGET", "x86_64-unknown-linux-gnu");
-
         let profile = &self.profile;
         let debug = profile.debuginfo != "0";
-        cmd.env("DEBUG", debug.to_string())
-            .env("OPT_LEVEL", profile.opt_level.to_string())
-            .env("PROFILE", &profile.name) // TODO(phlip9): should be base?
-            ;
 
         // TODO(phlip9): `links`, `DEP_<name>_<key>`, `NUM_JOBS`, `RUSTC_LINKER`
+        cmd.env("CARGO", "") // TODO
+            .env("CARGO_CFG_PANIC", profile.panic)
+            .env("CARGO_ENCODED_RUSTFLAGS", "")
+            .env("CARGO_MAKEFLAGS", "") // TODO
+            .env("CARGO_MANIFEST_DIR", &self.src) // TODO(phlip9): incorrect for workspace
+            .env("CARGO_MANIFEST_LINKS", "") // TODO
+            .env("DEBUG", debug.to_string())
+            .env("HOST", self.host_target_triple.as_ref().unwrap())
+            .env("OPT_LEVEL", profile.opt_level.to_string())
+            .env("OUT_DIR", &out_dir)
+            .env("PROFILE", &profile.name) // TODO(phlip9): should be base?
+            .env("RUSTC", "rustc")
+            .env("RUSTDOC", "rustdoc")
+            .env("TARGET", &self.target_triple);
+
+        // rustc target cfg envs
+        rustc_target_cfgs.env_cfgs(|env_key, env_value| {
+            cmd.env(env_key, env_value);
+        });
 
         // CARGO_PKG_<...> envs
         cmd.envs_cargo_pkg(self);
@@ -607,10 +630,6 @@ impl BuildContext {
                 .expect("Failed to symlink direct dep into our $out/deps dir");
         }
     }
-
-    fn is_custom_build(&self) -> bool {
-        self.target.kind == TargetKind::CustomBuild
-    }
 }
 
 //
@@ -640,6 +659,10 @@ impl Target {
 
     fn is_executable(&self) -> bool {
         matches!(self.kind, TargetKind::Bin | TargetKind::ExampleBin)
+    }
+
+    fn is_custom_build(&self) -> bool {
+        self.kind == TargetKind::CustomBuild
     }
 
     /// True if this target requires a `-C extra-filename=-{metadata-hash}` arg
