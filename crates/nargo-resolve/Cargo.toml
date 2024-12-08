@@ -7,7 +7,6 @@ edition.workspace = true
 [dependencies]
 nargo-core = { path = "../nargo-core", features = ["serde"] }
 
-anyhow.workspace = true
 assert-json-diff.workspace = true
 lexopt.workspace = true
 serde.workspace = true

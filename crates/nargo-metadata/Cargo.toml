@@ -7,7 +7,6 @@ edition.workspace = true
 [dependencies]
 nargo-core = { path = "../nargo-core", features = ["serde"] }
 
-anyhow.workspace = true
 lexopt.workspace = true
 semver = { workspace = true, features = ["serde"] }
 serde.workspace = true

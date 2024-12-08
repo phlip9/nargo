@@ -2,7 +2,7 @@
 
 use std::{cmp, collections::BTreeMap, fmt};
 
-use anyhow::Context;
+use nargo_core::error::Context as _;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 

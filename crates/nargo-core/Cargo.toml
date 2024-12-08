@@ -9,5 +9,4 @@ default = []
 serde = ["dep:serde"]
 
 [dependencies]
-anyhow.workspace = true
 serde = { workspace = true, optional = true }

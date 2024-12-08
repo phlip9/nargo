@@ -1,5 +1,4 @@
-use anyhow::Context as _;
-use nargo_core::nargo;
+use nargo_core::{nargo, error::Context as _};
 
 use crate::input::{self, DepKind, PkgId};
 

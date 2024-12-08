@@ -7,5 +7,4 @@ edition.workspace = true
 [dependencies]
 nargo-core = { path = "../nargo-core" }
 
-anyhow.workspace = true
 semver.workspace = true

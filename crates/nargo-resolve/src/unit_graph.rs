@@ -6,8 +6,7 @@ use std::{
     path::Path,
 };
 
-use anyhow::Context;
-use nargo_core::nargo;
+use nargo_core::{error::Context as _, nargo};
 use serde::Deserialize;
 
 use crate::resolve;

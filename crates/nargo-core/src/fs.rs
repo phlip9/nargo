@@ -1,10 +1,9 @@
+use crate::error::{Context, Result};
 use std::{
     fs,
     io::{self, Read, Write},
     path::{Path, PathBuf},
 };
-
-use anyhow::Context;
 
 /// Raw `cargo` json output can be fairly large (a few MiB). To avoid too
 /// many realloc's while reading stdin, we'll make an initial size guess of
@@ -21,7 +20,7 @@ fn link_ctx(target: &Path, symlink: &Path) -> Box<str> {
 
 // --- read --- //
 
-pub fn read_file_or_stdin(path: Option<&Path>) -> anyhow::Result<Vec<u8>> {
+pub fn read_file_or_stdin(path: Option<&Path>) -> Result<Vec<u8>> {
     match path {
         None => read_stdin(),
         Some(path) if path == Path::new("-") => read_stdin(),
@@ -29,7 +28,7 @@ pub fn read_file_or_stdin(path: Option<&Path>) -> anyhow::Result<Vec<u8>> {
     }
 }
 
-pub fn read_existing_file(path: &Path) -> anyhow::Result<Vec<u8>> {
+pub fn read_existing_file(path: &Path) -> Result<Vec<u8>> {
     read_file_inner(path)
         .and_then(|opt_file| {
             opt_file.ok_or(io::Error::from(io::ErrorKind::NotFound))
@@ -37,7 +36,7 @@ pub fn read_existing_file(path: &Path) -> anyhow::Result<Vec<u8>> {
         .with_context(|| path_ctx(path))
 }
 
-pub fn read_file(path: &Path) -> anyhow::Result<Option<Vec<u8>>> {
+pub fn read_file(path: &Path) -> Result<Option<Vec<u8>>> {
     read_file_inner(path).with_context(|| path_ctx(path))
 }
 
@@ -52,7 +51,7 @@ fn read_file_inner(path: &Path) -> io::Result<Option<Vec<u8>>> {
     Ok(Some(buf))
 }
 
-fn read_stdin() -> anyhow::Result<Vec<u8>> {
+fn read_stdin() -> Result<Vec<u8>> {
     // `stdin` doesn't know how large the input is, so we have to guess.
     let mut buf = Vec::with_capacity(INIT_SIZE_GUESS);
     let mut stdin = io::stdin().lock();
@@ -62,10 +61,7 @@ fn read_stdin() -> anyhow::Result<Vec<u8>> {
 
 // --- write --- //
 
-pub fn write_file_or_stdout(
-    path: Option<&Path>,
-    buf: &[u8],
-) -> anyhow::Result<()> {
+pub fn write_file_or_stdout(path: Option<&Path>, buf: &[u8]) -> Result<()> {
     match path {
         None => write_stdout(buf),
         Some(path) if path == Path::new("-") => write_stdout(buf),
@@ -73,11 +69,11 @@ pub fn write_file_or_stdout(
     }
 }
 
-pub fn write_file(path: &Path, buf: &[u8]) -> anyhow::Result<()> {
+pub fn write_file(path: &Path, buf: &[u8]) -> Result<()> {
     fs::write(path, buf).with_context(|| path_ctx(path))
 }
 
-pub fn write_stdout(buf: &[u8]) -> anyhow::Result<()> {
+pub fn write_stdout(buf: &[u8]) -> Result<()> {
     let mut stdout = io::stdout().lock();
     stdout
         .write_all(buf)
@@ -87,18 +83,18 @@ pub fn write_stdout(buf: &[u8]) -> anyhow::Result<()> {
 
 // --- mkdir --- //
 
-pub fn create_dir(path: &Path) -> anyhow::Result<()> {
+pub fn create_dir(path: &Path) -> Result<()> {
     fs::create_dir(path).with_context(|| path_ctx(path))
 }
 
 // --- link --- //
 
-// pub fn hard_link(target: &Path, link: &Path) -> anyhow::Result<()> {
+// pub fn hard_link(target: &Path, link: &Path) -> Result<()> {
 //     fs::hard_link(target, link).with_context(|| link_ctx(target, link))
 // }
 
 /// Create a symlink file `symlink` -- pointing at --> a `target` path.
-pub fn symlink(target: &Path, symlink: &Path) -> anyhow::Result<()> {
+pub fn symlink(target: &Path, symlink: &Path) -> Result<()> {
     #[cfg(unix)]
     {
         std::os::unix::fs::symlink(target, symlink)
@@ -110,6 +106,6 @@ pub fn symlink(target: &Path, symlink: &Path) -> anyhow::Result<()> {
     }
 }
 
-pub fn canonicalize(path: &Path) -> anyhow::Result<PathBuf> {
+pub fn canonicalize(path: &Path) -> Result<PathBuf> {
     fs::canonicalize(path).with_context(|| path_ctx(path))
 }

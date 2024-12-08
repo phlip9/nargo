@@ -2,8 +2,10 @@ use std::path::Path;
 use std::str::FromStr;
 use std::{borrow::Cow, collections::BTreeMap};
 
-use anyhow::Context as _;
-use nargo_core::nargo::{CrateType, TargetKind};
+use nargo_core::{
+    error::Context as _,
+    nargo::{CrateType, TargetKind},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::ser::{PrettyFormatter, Serializer};
 use serde_json::value::RawValue;

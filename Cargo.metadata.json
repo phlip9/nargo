@@ -1,23 +1,5 @@
 {
  "packages": {
-  "#anyhow@1.0.86": {
-   "name": "anyhow",
-   "version": "1.0.86",
-   "source": "crates.io",
-   "hash": "sha256-PWzKwkrVDieC50uWfLeFhFgwFaXHHLRmVsP1gn+5nEY=",
-   "edition": "2018",
-   "rust_version": "1.39",
-   "features": {
-    "backtrace": ["dep:backtrace"],
-    "default": ["std"],
-    "std": []
-   },
-   "deps": {},
-   "targets": [
-    {"name":"build-script-build","kind":"custom-build","crate_types":["bin"],"path":"build.rs","edition":"2018"},
-    {"name":"anyhow","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
-   ]
-  },
   "#assert-json-diff@2.0.2": {
    "name": "assert-json-diff",
    "version": "2.0.2",
@@ -259,7 +241,6 @@
     "serde": ["dep:serde"]
    },
    "deps": {
-    "#anyhow@1.0.86": {"name":"anyhow","kinds":[{}]},
     "#serde@1.0.203": {"name":"serde","kinds":[{"optional":true,"features":["derive"]}]}
    },
    "targets": [
@@ -272,7 +253,6 @@
    "edition": "2021",
    "features": {},
    "deps": {
-    "#anyhow@1.0.86": {"name":"anyhow","kinds":[{}]},
     "#lexopt@0.3.0": {"name":"lexopt","kinds":[{"default":false}]},
     "#semver@1.0.23": {"name":"semver","kinds":[{"features":["serde"]}]},
     "#serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
@@ -290,7 +270,6 @@
    "edition": "2021",
    "features": {},
    "deps": {
-    "#anyhow@1.0.86": {"name":"anyhow","kinds":[{}]},
     "#assert-json-diff@2.0.2": {"name":"assert-json-diff","kinds":[{"default":false}]},
     "#lexopt@0.3.0": {"name":"lexopt","kinds":[{"default":false}]},
     "#serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
@@ -308,7 +287,6 @@
    "edition": "2021",
    "features": {},
    "deps": {
-    "#anyhow@1.0.86": {"name":"anyhow","kinds":[{}]},
     "#semver@1.0.23": {"name":"semver","kinds":[{}]},
     "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{}]}
    },

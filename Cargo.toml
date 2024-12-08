@@ -19,7 +19,6 @@ authors = [
 edition = "2021"
 
 [workspace.dependencies]
-anyhow = "1"
 assert-json-diff = "2"
 lexopt = "0.3"
 semver = "1"

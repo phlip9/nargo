@@ -2,7 +2,10 @@
 
 use std::{fmt, str::FromStr};
 
-use anyhow::{anyhow, Context as _};
+use crate::{
+    error::{Context as _, Error},
+    format_err,
+};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -124,7 +127,7 @@ impl TargetKind {
 }
 
 impl FromStr for TargetKind {
-    type Err = anyhow::Error;
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "lib" => Ok(Self::Lib),
@@ -134,7 +137,7 @@ impl FromStr for TargetKind {
             "example-bin" => Ok(Self::ExampleBin),
             "example-lib" => Ok(Self::ExampleLib),
             "custom-build" => Ok(Self::CustomBuild),
-            _ => Err(anyhow!("invalid `kind`: '{s}'")),
+            _ => Err(format_err!("invalid `kind`: '{s}'")),
         }
     }
 }
@@ -222,7 +225,7 @@ impl CrateType {
 }
 
 impl FromStr for CrateType {
-    type Err = anyhow::Error;
+    type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "bin" => Self::Bin,
@@ -232,7 +235,7 @@ impl FromStr for CrateType {
             "cdylib" => Self::Cdylib,
             "staticlib" => Self::Staticlib,
             "proc-macro" => Self::ProcMacro,
-            _ => return Err(anyhow!("invalid crate-type: '{s}'")),
+            _ => return Err(format_err!("invalid crate-type: '{s}'")),
         })
     }
 }

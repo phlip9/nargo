@@ -1,10 +1,14 @@
 //! Prefetching and pinning crates from crates.io using `nix store prefetch-file`.
 
-use core::str;
-use std::{borrow::Cow, cmp::min, path::Path, process, sync::Mutex, thread};
+use std::{
+    borrow::Cow, cmp::min, path::Path, process, str, sync::Mutex, thread,
+};
 
-use anyhow::{format_err, Context};
-use nargo_core::{info, logger, which::which};
+use nargo_core::{
+    error::{Context as _, Result},
+    format_err, info, logger,
+    which::which,
+};
 use serde::Deserialize;
 
 use crate::output;
@@ -60,7 +64,7 @@ pub fn prefetch(output: &mut output::Metadata<'_>) {
 fn nix_store_prefetch_file(
     nix: &Path,
     pkg: &output::Package<'_>,
-) -> anyhow::Result<NixPrefetchOutput> {
+) -> Result<NixPrefetchOutput> {
     let prefetch_name = pkg.prefetch_name();
     let prefetch_url = pkg.prefetch_url();
 
