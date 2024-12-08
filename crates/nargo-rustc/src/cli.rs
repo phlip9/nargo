@@ -94,7 +94,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::run;
+use crate::{run, semver};
 use nargo_core::{env, logger, trace};
 
 pub struct ArgsRaw {
@@ -131,7 +131,7 @@ pub struct Args<'a> {
     pub(crate) target_name: &'a str,
     pub(crate) target_path: &'a Path,
     pub(crate) target_triple: &'a str,
-    pub(crate) version: semver::Version,
+    pub(crate) version: semver::Version<'a>,
 }
 
 #[derive(Debug)] // TODO(phlip9): remove
@@ -204,11 +204,8 @@ impl<'a> Args<'a> {
         };
 
         let version = args.version.as_str();
-        let version = semver::Version::parse(version)
-            .map_err(|err| {
-                format!("version env ({version}) is not valid semver: {err}")
-            })
-            .unwrap();
+        let version =
+            semver::Version::from_str(version).expect("`version` env");
 
         let log = logger::Level::from_str(&args.log).expect("invalid LOG env");
 

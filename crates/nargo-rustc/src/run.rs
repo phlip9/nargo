@@ -17,7 +17,7 @@ use nargo_core::{
 };
 
 use crate::{
-    build_script::BuildOutput, cli, shell, target_cfg::RustcTargetCfg,
+    build_script::BuildOutput, cli, semver, shell, target_cfg::RustcTargetCfg,
 };
 
 pub(crate) struct BuildContext {
@@ -35,7 +35,7 @@ pub(crate) struct BuildContext {
 
 struct Target {
     name: String,
-    version: semver::Version,
+    version: semver::Version<'static>,
     kind: TargetKind,
     crate_name: String,
     crate_types: Vec<CrateType>,
@@ -95,7 +95,7 @@ impl BuildContext {
 
         let target = Target {
             name: args.target_name.to_owned(),
-            version: args.version,
+            version: args.version.leak(),
             kind,
             crate_name,
             crate_types,
@@ -826,11 +826,11 @@ impl CommandExt for Command {
             .env("CARGO_PKG_README", "") // TODO
             .env("CARGO_PKG_REPOSITORY", "") // TODO
             .env("CARGO_PKG_RUST_VERSION", "") // TODO
-            .env("CARGO_PKG_VERSION", target.version.to_string())
-            .env("CARGO_PKG_VERSION_MAJOR", target.version.major.to_string())
-            .env("CARGO_PKG_VERSION_MINOR", target.version.minor.to_string())
-            .env("CARGO_PKG_VERSION_PATCH", target.version.patch.to_string())
-            .env("CARGO_PKG_VERSION_PRE", target.version.pre.as_str())
+            .env("CARGO_PKG_VERSION", target.version.as_str())
+            .env("CARGO_PKG_VERSION_MAJOR", target.version.major())
+            .env("CARGO_PKG_VERSION_MINOR", target.version.minor())
+            .env("CARGO_PKG_VERSION_PATCH", target.version.patch())
+            .env("CARGO_PKG_VERSION_PRE", target.version.pre().unwrap_or(""))
     }
 }
 

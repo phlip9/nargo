@@ -287,7 +287,6 @@
    "edition": "2021",
    "features": {},
    "deps": {
-    "#semver@1.0.23": {"name":"semver","kinds":[{}]},
     "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{}]}
    },
    "targets": [

@@ -58,7 +58,6 @@ name = "nargo-rustc"
 version = "0.1.0"
 dependencies = [
  "nargo-core",
- "semver",
 ]
 
 [[package]]
