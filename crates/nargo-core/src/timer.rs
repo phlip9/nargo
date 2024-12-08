@@ -1,49 +1,54 @@
 use std::time::Instant;
 
-pub struct Timer {
-    file: &'static str,
-    label: &'static str,
+use crate::logger;
+
+pub struct Timer<'a> {
+    level: logger::Level,
+    label: &'a str,
     start: Instant,
-    line: u32,
 }
 
-impl Timer {
-    pub fn new(file: &'static str, line: u32, label: &'static str) -> Self {
+impl<'a> Timer<'a> {
+    pub fn new(level: logger::Level, label: &'a str) -> Self {
         Self {
-            file,
+            level,
             label,
             start: Instant::now(),
-            line,
         }
     }
 }
 
-impl Drop for Timer {
+impl<'a> Drop for Timer<'a> {
     fn drop(&mut self) {
-        eprintln!(
-            "[{}:{}] {}: {:?}",
-            self.file,
-            self.line,
-            self.label,
-            self.start.elapsed(),
-        );
+        if (self.level as u8) <= logger::max_level() {
+            logger::log(format_args!(
+                "{}: {:?}",
+                self.label,
+                self.start.elapsed()
+            ));
+        }
     }
 }
 
 #[macro_export]
-macro_rules! time {
-    ($label:expr, $b:block $(,)?) => {{
-        let _timer =
-            $crate::timer::Timer::new(::std::file!(), ::std::line!(), $label);
+macro_rules! time_inner {
+    ($lvl:expr, $label:expr, $b:block $(,)?) => {{
+        let _timer = $crate::timer::Timer::new($lvl, $label);
         $b
     }};
-    ($label:expr, $e:expr $(,)?) => {{
-        time!($label, { $e })
+    ($lvl:expr, $label:expr, $e:expr $(,)?) => {{
+        $crate::time_inner!($lvl, $label, { $e })
     }};
-    ($b:block) => {{
-        time!("block", $b)
+    ($lvl:expr, $e:expr) => {{
+        $crate::time_inner!($lvl, ::std::stringify!($e), { $e })
     }};
-    ($e:expr) => {{
-        time!(::std::stringify!($e), { $e })
-    }};
+}
+
+#[macro_export]
+macro_rules! time {
+    ($($arg:tt)+) => ($crate::time_inner!($crate::logger::Level::Trace, $($arg)+))
+}
+#[macro_export]
+macro_rules! info_time {
+    ($($arg:tt)+) => ($crate::time_inner!($crate::logger::Level::Info, $($arg)+))
 }

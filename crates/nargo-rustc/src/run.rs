@@ -13,7 +13,7 @@ use std::{
 use nargo_core::{
     fs,
     nargo::{CrateType, TargetKind},
-    time,
+    time, trace,
 };
 
 use crate::{
@@ -430,7 +430,7 @@ impl BuildContext {
         // CARGO_PKG_<...> envs
         cmd.envs_cargo_pkg(self);
 
-        eprint!("{}", cmd.to_string_debug());
+        trace!("{}", cmd.to_string_debug());
 
         let status =
             time!("run rustc", cmd.status()).expect("failed to run `rustc`");
@@ -508,7 +508,7 @@ impl BuildContext {
         // TODO(phlip9): parse `cargo::error=MESSAGE` and `cargo::warning=MESSAGE`
         //               then fail build if any errors.
 
-        eprint!("{}", cmd.to_string_debug());
+        trace!("{}", cmd.to_string_debug());
 
         let status = time!("run build_script_build", cmd.status())
             .expect("failed to run `$out/build_script_build`");

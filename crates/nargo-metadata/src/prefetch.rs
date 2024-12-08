@@ -4,7 +4,7 @@ use core::str;
 use std::{borrow::Cow, cmp::min, path::Path, process, sync::Mutex, thread};
 
 use anyhow::{format_err, Context};
-use nargo_core::which::which;
+use nargo_core::{info, logger, which::which};
 use serde::Deserialize;
 
 use crate::output;
@@ -44,9 +44,12 @@ pub fn prefetch(output: &mut output::Metadata<'_>) {
                     .expect("Failed to prefetch crate");
 
                 let hash = out.hash;
-                eprintln!("prefetch: {pkg_id} -> \"{hash}\"");
+                info!("prefetch: {pkg_id} -> \"{hash}\"");
 
                 pkg.hash = Some(output::SriHash(Cow::Owned(hash)));
+
+                // flush thead-local log buffer
+                logger::flush();
             });
         }
     });

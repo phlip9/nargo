@@ -1,7 +1,10 @@
+use nargo_core::logger;
+
 fn main() {
     nargo_core::panic::set_hook();
 
-    let args = match nargo_resolve::cli::Args::from_env() {
+    let args = nargo_resolve::cli::Args::from_env();
+    let args = match args {
         Ok(args) => args,
         Err(err) => {
             eprintln!("{err}");
@@ -10,4 +13,6 @@ fn main() {
     };
 
     args.run();
+
+    logger::flush();
 }

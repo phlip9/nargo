@@ -7,7 +7,8 @@ cargo-metadata-json:
     cargo metadata --format-version=1 --all-features \
         | cargo run -p nargo-metadata -- \
             --output-metadata Cargo.metadata.json \
-            --nix-prefetch
+            --nix-prefetch \
+            --verbose
 
 smoketest-pkg pkg:
     nix build -L --show-trace \

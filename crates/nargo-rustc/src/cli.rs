@@ -91,10 +91,11 @@ _=/nix/store/57w1j7l0qm47qirpzv94d3qlmr6a9qj1-nargo-rustc-0.1.0/bin/nargo-rustc
 use std::{
     ffi::{OsStr, OsString},
     path::Path,
+    str::FromStr,
 };
 
 use crate::run;
-use nargo_core::env;
+use nargo_core::{env, logger, trace};
 
 pub struct ArgsRaw {
     pub(crate) build_script_dep: OsString,
@@ -105,6 +106,7 @@ pub struct ArgsRaw {
     pub(crate) edition: String,
     pub(crate) features: String,
     pub(crate) kind: String,
+    pub(crate) log: String,
     pub(crate) out: OsString,
     pub(crate) pkg_name: String,
     pub(crate) src: OsString,
@@ -122,6 +124,7 @@ pub struct Args<'a> {
     pub(crate) edition: &'a str,
     pub(crate) features: &'a str,
     pub(crate) kind: &'a str,
+    pub(crate) log: logger::Level,
     pub(crate) out: &'a Path,
     pub(crate) pkg_name: &'a str,
     pub(crate) src: &'a Path,
@@ -149,6 +152,7 @@ impl ArgsRaw {
             edition: env::var("EDITION").unwrap(),
             features: env::var("FEATURES").unwrap(),
             kind: env::var("KIND").unwrap(),
+            log: env::var("LOG").unwrap(),
             out: env::var_os("out").unwrap(),
             pkg_name: env::var("PKG_NAME").unwrap(),
             src: env::var_os("src").unwrap(),
@@ -175,6 +179,7 @@ impl ArgsRaw {
             "EDITION",
             "FEATURES",
             "KIND",
+            "LOG",
             "out",
             "PKG_NAME",
             "src",
@@ -205,6 +210,8 @@ impl<'a> Args<'a> {
             })
             .unwrap();
 
+        let log = logger::Level::from_str(&args.log).expect("invalid LOG env");
+
         Self {
             build_script_dep,
             crate_type: &args.crate_type,
@@ -216,6 +223,7 @@ impl<'a> Args<'a> {
             edition: &args.edition,
             features: &args.features,
             kind: &args.kind,
+            log,
             out: Path::new(&args.out),
             pkg_name: &args.pkg_name,
             src: Path::new(&args.src),
@@ -227,9 +235,18 @@ impl<'a> Args<'a> {
     }
 
     pub fn run(self) {
-        eprintln!("args: {self:#?}");
+        logger::set_level(self.log);
+
+        trace!("args: {self:#?}");
 
         run::BuildContext::from_args(self).run()
+    }
+
+    pub fn label(&self) -> String {
+        let pkg_name = self.pkg_name;
+        let version = &self.version;
+        let kind = self.kind;
+        format!("{pkg_name}-{version}-{kind}")
     }
 }
 

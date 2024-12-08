@@ -36,6 +36,7 @@ pkgs.stdenv.mkDerivation {
     EDITION = target.edition;
     FEATURES = builtins.concatStringsSep "," (builtins.attrNames target.features);
     KIND = target.kind;
+    LOG = "info";
     PKG_NAME = pkgMetadata.name;
     TARGET_NAME = target.name;
     TARGET_PATH = target.path;

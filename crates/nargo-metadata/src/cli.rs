@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use nargo_core::{fs, time};
+use nargo_core::{fs, logger, time};
 
 use crate::run;
 
@@ -16,6 +16,9 @@ FLAGS:
 
   -V, --version
       Prints version
+
+  -v, --verbose
+      Verbose logging
 
 OPTIONS:
   --input-raw-metadata PATH
@@ -73,6 +76,9 @@ impl Args {
                 Short('V') | Long("version") => {
                     print!("{}", VERSION);
                     std::process::exit(0);
+                }
+                Short('v') | Long("verbose") => {
+                    logger::set_level(logger::Level::Trace);
                 }
                 Long("input-raw-metadata") if input_raw_metadata.is_none() => {
                     input_raw_metadata = Some(PathBuf::from(parser.value()?));

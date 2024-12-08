@@ -1,4 +1,4 @@
-use nargo_core::time;
+use nargo_core::{info_time, logger, time};
 
 use nargo_rustc::cli;
 
@@ -13,5 +13,8 @@ fn main() {
 
     let args = time!("parse args", cli::Args::from_raw(&args_raw));
 
-    time!("run", args.run());
+    let label = args.label();
+    info_time!(&label, args.run());
+
+    logger::flush();
 }

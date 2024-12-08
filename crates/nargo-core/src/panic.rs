@@ -3,6 +3,8 @@ use std::{
     panic::{Location, PanicHookInfo},
 };
 
+use crate::logger;
+
 /// Set a small custom panic hook that prints panics to `stderr` before calling
 /// `std::process:exit(1)`.
 ///
@@ -12,6 +14,9 @@ pub fn set_hook() {
 }
 
 fn nargo_panic_hook(panic_info: &PanicHookInfo<'_>) {
+    // Flush any pending log messages.
+    logger::flush();
+
     // Extract message and location from panic.
     let payload = panic_info.payload();
     let message: &str = if let Some(s) = payload.downcast_ref::<&str>() {
