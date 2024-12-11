@@ -30,6 +30,9 @@ lib.makeScope pkgs.newScope (self: {
   # crane `vendorCargoDeps` on this repo.
   nargoVendoredCargoDeps = craneLib.vendorCargoDeps {src = ../.;};
 
+  # `nixprof` for profiling `nix build`
+  nixprof = pkgs.callPackage ./nixprof.nix {};
+
   # The cargo feature resolution algorithm, implemented in nix.
   resolve = import ./resolve.nix {
     inherit lib;
