@@ -2,13 +2,14 @@
 {
   lib,
   stdenv,
+  stdenvNoCC,
   pkgs,
   rustc,
   build,
   resolve,
 }:
 # NOTE(phlip9): we need to "manually" build `nargo-rustc` to bootstrap
-stdenv.mkDerivation {
+stdenvNoCC.mkDerivation {
   pname = "nargo-rustc";
   version = "0.1.0";
 
@@ -20,14 +21,14 @@ stdenv.mkDerivation {
     ];
   };
 
-  depsBuildTarget = [rustc.unwrapped];
+  depsBuildTarget = [rustc.unwrapped stdenv.cc];
 
   phases = ["buildPhase"];
 
   buildPhase = ''
     rustc_deps="$(mktemp -d)"
     src_nargo_core="$src/nargo-core"
-    target_triple="${stdenv.hostPlatform.rust.rustcTarget}"
+    target_triple="${stdenvNoCC.hostPlatform.rust.rustcTarget}"
 
     # nargo-core (lib)
     rustc \

@@ -79,3 +79,113 @@ diff-clean-metadata-manifests pkg:
     diff --unified=10 --color=always \
         <(just clean-cargo-metadata "{{ pkg }}") \
         <(just clean-workspace-manifests "{{ pkg }}")
+
+nix-build-profiling drv:
+    time -v nix build --rebuild --log-format internal-json --debug {{ drv }} 2>&1 \
+        | ts -s -m "[%.s]" \
+        > dump/nixprof.log
+
+print-bind-mounts log:
+    rg -o -r '$1' "sandbox setup: bind mounting '([^']+)' to '[^']+'" {{ log }}
+
+print-file-evals log:
+    rg -o -r '$1' "evaluating file '([^']+)'" {{ log }}
+
+print-file-copies log:
+    rg -o -r '$1' "copying '([^']+)'" {{ log }}
+
+print-input-paths log:
+    rg -o -r '$1' "added input paths ('.*')" {{ log }} \
+        | sed -e 's/, /\n/g' \
+        | sed -e "s/'\(.*\)'/\\1/g"
+
+# bench building a single drv with warm caches
+bench-drv-cached drv:
+    nix build {{ drv }}
+    hyperfine --warmup 3 --min-runs 3 'nix build --rebuild {{ drv }}'
+    just nix-build-profiling {{ drv }}
+
+# bench building a single drv with cold caches
+# TODO(phlip9): impl
+
+nix-daemon-pid:
+    @# ensure nix-daemon is running
+    @nix store info 2> /dev/null
+    @systemctl show nix-daemon.service -P MainPID
+
+perf-check-not-paranoid:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [[ "$(< /proc/sys/kernel/perf_event_paranoid)" != "-1" ]]; then
+        echo >&2 "error: you need to allow all perf events"
+        echo >&2 ""
+        echo >&2 "    just perf-reduce-paranoia"
+        echo >&2 ""
+        exit 1
+    fi
+    if [[ "$(< /proc/sys/kernel/kptr_restrict)" != "0" ]]; then
+        echo >&2 "error: you need to expose kernel symbols"
+        echo >&2 ""
+        echo >&2 "    just perf-reduce-paranoia"
+        echo >&2 ""
+        exit 1
+    fi
+
+perf-reduce-paranoia:
+    echo "-1" | sudo tee /proc/sys/kernel/perf_event_paranoid
+    echo "0" | sudo tee /proc/sys/kernel/kptr_restrict
+
+nix-build-grind drv:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # retry a command until it fails
+    # set `N=10` to run across 10 processes, in parallel.
+    function retry() {
+        # Check for args
+        [[ $# -eq 0 ]] && exit 1
+
+        # Number of parallel processes
+        N=${N:-1}
+
+        # Spawns a child worker
+        do_work() {
+            while "$@"; do :; done
+        }
+        export -f do_work
+
+        # Simplified handling for case N=1
+        if [[ $N -eq 1 ]]; then
+            do_work "$@"
+        else
+            # Use GNU parallel to run the workers in parallel, exiting early when
+            # the first fails.
+            seq "$N" | parallel --jobs "$N" --ungroup --halt now,done=1 do_work "$@"
+        fi
+    }
+
+    nix build {{ drv }}
+    retry nix build --rebuild --offline {{ drv }}
+
+perf-nix-daemon:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    just perf-check-not-paranoid
+    nixd_pid="$(just nix-daemon-pid)"
+    nix="$(which nix)"
+
+    # --timestamp
+    # --stat
+    # --call-graph=lbr
+    # --call-graph=dwarf
+    # --cgroup=/system.slice/nix-daemon.service
+    sudo perf record \
+        --pid=$nixd_pid --inherit --freq=2000 -g --call-graph=dwarf \
+        -- sleep 5
+
+    sudo chown $USER:$USER perf.data
+    chmod a+r perf.data
+
+    perf script > perf.data.txt

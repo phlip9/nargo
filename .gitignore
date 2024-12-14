@@ -31,10 +31,13 @@ result-*
 /.direnv
 
 # nix derivation result link
-/result
+/result*
 
 # home-manager generated coc-settings for this repo.
 /.vim/coc-settings.json
 
 # dumping ground for sample data
 /dump
+
+# Linux perf output
+/perf.data*

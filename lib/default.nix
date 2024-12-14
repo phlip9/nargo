@@ -8,8 +8,27 @@
 #
 # See: [`nixpkgs#lib.makeScope`]
 lib.makeScope pkgs.newScope (self: {
+  # `cargo build`, implemented in nix.
+  build = self.callPackage ./build.nix {};
+
+  # compile a single crate target with `nargo-rustc`, which wraps `rustc`
+  buildCrate = self.callPackage ./buildCrate.nix {};
+
   # inject some external dependencies
   craneLib = craneLib;
+
+  # empty bare `derivation` for benchmarking
+  emptyDrv = builtins.derivation {
+    name = "empty";
+    system = pkgs.buildPlatform.system;
+    builder = "${pkgs.bash}/bin/bash";
+    args = ["-c" "echo '' > $out"];
+    preferLocalBuild = true;
+    allowSubstitutes = false;
+  };
+
+  # empty `stdenv.mkDerivation` for benchmarking
+  emptyDrvStdenv = pkgs.runCommandNoCC "empty" {} "touch $out";
 
   # Generate the `Cargo.metadata.json` file used to build packages from a cargo
   # workspace.
@@ -38,12 +57,6 @@ lib.makeScope pkgs.newScope (self: {
     inherit lib;
     targetCfg = self.targetCfg;
   };
-
-  # `cargo build`, implemented in nix.
-  build = self.callPackage ./build.nix {};
-
-  # compile a single crate target with `nargo-rustc`, which wraps `rustc`
-  buildCrate = self.callPackage ./buildCrate.nix {};
 
   # Rust `cfg(...)` expression parser and evaluator.
   targetCfg = import ./targetCfg.nix {inherit lib;};
