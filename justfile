@@ -116,40 +116,7 @@ nix-daemon-pid:
 # check if the kernel allows all perf events
 [linux]
 perf-check-not-paranoid:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    eprintln() {
-        echo >&2 "$1"
-    }
-
-    check() {
-        file="$1"
-        expected="$2"
-        why="$3"
-        if [[ ! -f "$file" ]]; then
-            eprintln "error: can't find file $file"
-            eprintln ""
-            eprintln "suggestion: ensure your Linux kernel supports perf events"
-            exit 1
-        fi
-
-        actual="$(< $file)"
-        if [[ "$actual" != "$expected" ]]; then
-            eprintln "error: you need to $why"
-            eprintln ""
-            eprintln "      file: $file"
-            eprintln "    actual: $actual"
-            eprintln "  expected: $expected"
-            eprintln ""
-            eprintln "suggestion: just perf-reduce-paranoia"
-            eprintln ""
-            exit 1
-        fi
-    }
-
-    check /proc/sys/kernel/perf_event_paranoid "-1" "allow all perf events"
-    check /proc/sys/kernel/kptr_restrict "0" "expose kernel symbols"
+    @./just/perf-check-not-paranoid.sh
 
 [macos]
 [no-exit-message]
@@ -164,135 +131,19 @@ perf-reduce-paranoia:
 
 # `retry nix build --rebuild --offline {{ drv }}`
 nix-build-grind drv:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    # retry a command until it fails
-    # set `N=10` to run across 10 processes, in parallel.
-    function retry() {
-        # Check for args
-        [[ $# -eq 0 ]] && exit 1
-
-        # Number of parallel processes
-        N=${N:-1}
-
-        # Spawns a child worker
-        do_work() {
-            while "$@"; do :; done
-        }
-        export -f do_work
-
-        # Simplified handling for case N=1
-        if [[ $N -eq 1 ]]; then
-            do_work "$@"
-        else
-            # Use GNU parallel to run the workers in parallel, exiting early when
-            # the first fails.
-            seq "$N" | parallel --jobs "$N" --ungroup --halt now,done=1 do_work "$@"
-        fi
-    }
-
-    nix build {{ drv }}
-    retry nix build --rebuild --offline {{ drv }}
+    @./just/nix-build-grind.sh {{ drv }}
 
 # `perf` profile the background `nix-daemon` process
 perf-nix-daemon:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    just perf-check-not-paranoid
-    nixd_pid="$(just nix-daemon-pid)"
-    nix="$(which nix)"
-
-    # --timestamp
-    # --stat
-    # --call-graph=lbr
-    # --call-graph=dwarf
-    # --cgroup=/system.slice/nix-daemon.service
-    sudo perf record \
-        --pid=$nixd_pid --inherit --freq=2000 -g --call-graph=dwarf \
-        -- sleep 15
-
-    sudo chown $USER:$USER perf.data
-    chmod a+r perf.data
-
-    perf script --fields +pid > perf.data.txt
+    @./just/perf-nix-daemon.sh
 
 # `samply` profile `nix $cmd`
 samply-nix *cmd:
-    #!/usr/bin/env bash
-    set -euo pipefail
+    @./just/samply-nix.sh {{ cmd }}
 
-    # setup
-    just perf-check-not-paranoid
-    nix="$(which nix)"
-    sample_rate=1999 # 997 # 97 # 3989
-    samply="$(which samply)"
-
-    # profile the cmd
-    $(which samply) record \
-        --rate $sample_rate \
-        --cswitch-markers \
-        --save-only \
-        --output profile.nix.json.gz \
-        -- $nix {{ cmd }}
-
-    # make profile and nix output link user-owned
-    sudo chown --no-dereference $USER:$USER profile.*.json.gz result*
-    chmod a+r profile.*.json.gz
-
-# `samply` profile the bg nix-daemon while also profiling `nix $cmd`
+# `samply` profile `nix $cmd` and the nix-daemon in the background
 samply-nix-and-daemon *cmd:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    # setup
-    just perf-check-not-paranoid
-    nix="$(which nix)"
-    nixd_pid="$(just nix-daemon-pid)"
-    sample_rate=1999 # 997 # 97 # 3989
-    samply="$(which samply)"
-
-    # stops the nix-daemon profiler
-    bg_profiler_pid=""
-    stop_samply_nix_daemon() {
-        if [[ ! -z "$bg_profiler_pid" ]]; then
-            sudo kill -SIGINT $bg_profiler_pid
-            wait $bg_profiler_pid
-        fi
-    }
-
-    # make sure we always cleanup
-    trap stop_samply_nix_daemon EXIT
-
-    # start profiling the nix-daemon process in the background
-    sudo $samply record \
-        --pid $nixd_pid \
-        --rate $sample_rate \
-        --cswitch-markers \
-        --save-only \
-        --output profile.nix-daemon.json.gz \
-        &
-    bg_profiler_pid=$!
-
-    # wait for bg profiler to warm up
-    sleep 1s
-
-    # profile the cmd
-    sudo $(which samply) record \
-        --rate $sample_rate \
-        --cswitch-markers \
-        --save-only \
-        --output profile.nix.json.gz \
-        -- $nix {{ cmd }}
-
-    # stop the background profiler and clear the trap
-    stop_samply_nix_daemon
-    trap - EXIT
-
-    # make profile and nix output link user-owned
-    sudo chown --no-dereference $USER:$USER profile.*.json.gz result*
-    chmod a+r profile.*.json.gz
+    @./just/samply-nix-and-daemon.sh {{ cmd }}
 
 # samply load profile in browser
 samply-load file="profile.nix.json.gz":
