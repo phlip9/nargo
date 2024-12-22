@@ -105,37 +105,64 @@ bench-drv-cached drv:
     hyperfine --warmup 3 --min-runs 3 'nix build --rebuild {{ drv }}'
     just nix-build-profiling {{ drv }}
 
-# bench building a single drv with cold caches
-# TODO(phlip9): impl
+# TODO(phlip9): bench building a single drv with cold caches
 
+# get the current nix-daemon PID
 nix-daemon-pid:
     @# ensure nix-daemon is running
     @nix store info 2> /dev/null
     @systemctl show nix-daemon.service -P MainPID
 
+# check if the kernel allows all perf events
+[linux]
 perf-check-not-paranoid:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    if [[ "$(< /proc/sys/kernel/perf_event_paranoid)" != "-1" ]]; then
-        echo >&2 "error: you need to allow all perf events"
-        echo >&2 ""
-        echo >&2 "    just perf-reduce-paranoia"
-        echo >&2 ""
-        exit 1
-    fi
-    if [[ "$(< /proc/sys/kernel/kptr_restrict)" != "0" ]]; then
-        echo >&2 "error: you need to expose kernel symbols"
-        echo >&2 ""
-        echo >&2 "    just perf-reduce-paranoia"
-        echo >&2 ""
-        exit 1
-    fi
+    eprintln() {
+        echo >&2 "$1"
+    }
 
+    check() {
+        file="$1"
+        expected="$2"
+        why="$3"
+        if [[ ! -f "$file" ]]; then
+            eprintln "error: can't find file $file"
+            eprintln ""
+            eprintln "suggestion: ensure your Linux kernel supports perf events"
+            exit 1
+        fi
+
+        actual="$(< $file)"
+        if [[ "$actual" != "$expected" ]]; then
+            eprintln "error: you need to $why"
+            eprintln ""
+            eprintln "      file: $file"
+            eprintln "    actual: $actual"
+            eprintln "  expected: $expected"
+            eprintln ""
+            eprintln "suggestion: just perf-reduce-paranoia"
+            eprintln ""
+            exit 1
+        fi
+    }
+
+    check /proc/sys/kernel/perf_event_paranoid "-1" "allow all perf events"
+    check /proc/sys/kernel/kptr_restrict "0" "expose kernel symbols"
+
+[macos]
+[no-exit-message]
+perf-check-not-paranoid:
+    @echo >&2 "error: perf and samply are not supported on macOS"
+    @exit 1
+
+# tell kernel to allow all perf events (requires sudo)
 perf-reduce-paranoia:
     echo "-1" | sudo tee /proc/sys/kernel/perf_event_paranoid
     echo "0" | sudo tee /proc/sys/kernel/kptr_restrict
 
+# `retry nix build --rebuild --offline {{ drv }}`
 nix-build-grind drv:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -168,6 +195,7 @@ nix-build-grind drv:
     nix build {{ drv }}
     retry nix build --rebuild --offline {{ drv }}
 
+# `perf` profile the background `nix-daemon` process
 perf-nix-daemon:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -183,9 +211,89 @@ perf-nix-daemon:
     # --cgroup=/system.slice/nix-daemon.service
     sudo perf record \
         --pid=$nixd_pid --inherit --freq=2000 -g --call-graph=dwarf \
-        -- sleep 5
+        -- sleep 15
 
     sudo chown $USER:$USER perf.data
     chmod a+r perf.data
 
-    perf script > perf.data.txt
+    perf script --fields +pid > perf.data.txt
+
+# `samply` profile `nix $cmd`
+samply-nix *cmd:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # setup
+    just perf-check-not-paranoid
+    nix="$(which nix)"
+    sample_rate=1999 # 997 # 97 # 3989
+    samply="$(which samply)"
+
+    # profile the cmd
+    $(which samply) record \
+        --rate $sample_rate \
+        --cswitch-markers \
+        --save-only \
+        --output profile.nix.json.gz \
+        -- $nix {{ cmd }}
+
+    # make profile and nix output link user-owned
+    sudo chown --no-dereference $USER:$USER profile.*.json.gz result*
+    chmod a+r profile.*.json.gz
+
+# `samply` profile the bg nix-daemon while also profiling `nix $cmd`
+samply-nix-and-daemon *cmd:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # setup
+    just perf-check-not-paranoid
+    nix="$(which nix)"
+    nixd_pid="$(just nix-daemon-pid)"
+    sample_rate=1999 # 997 # 97 # 3989
+    samply="$(which samply)"
+
+    # stops the nix-daemon profiler
+    bg_profiler_pid=""
+    stop_samply_nix_daemon() {
+        if [[ ! -z "$bg_profiler_pid" ]]; then
+            sudo kill -SIGINT $bg_profiler_pid
+            wait $bg_profiler_pid
+        fi
+    }
+
+    # make sure we always cleanup
+    trap stop_samply_nix_daemon EXIT
+
+    # start profiling the nix-daemon process in the background
+    sudo $samply record \
+        --pid $nixd_pid \
+        --rate $sample_rate \
+        --cswitch-markers \
+        --save-only \
+        --output profile.nix-daemon.json.gz \
+        &
+    bg_profiler_pid=$!
+
+    # wait for bg profiler to warm up
+    sleep 1s
+
+    # profile the cmd
+    sudo $(which samply) record \
+        --rate $sample_rate \
+        --cswitch-markers \
+        --save-only \
+        --output profile.nix.json.gz \
+        -- $nix {{ cmd }}
+
+    # stop the background profiler and clear the trap
+    stop_samply_nix_daemon
+    trap - EXIT
+
+    # make profile and nix output link user-owned
+    sudo chown --no-dereference $USER:$USER profile.*.json.gz result*
+    chmod a+r profile.*.json.gz
+
+# samply load profile in browser
+samply-load file="profile.nix.json.gz":
+    samply load {{ file }}

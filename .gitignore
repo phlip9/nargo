@@ -41,3 +41,6 @@ result-*
 
 # Linux perf output
 /perf.data*
+
+# samply profiler output
+/profile*.json.gz
