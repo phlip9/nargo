@@ -80,6 +80,14 @@ diff-clean-metadata-manifests pkg:
         <(just clean-cargo-metadata "{{ pkg }}") \
         <(just clean-workspace-manifests "{{ pkg }}")
 
+# --- nix --- #
+
+nix-fmt:
+    nix fmt -- .
+
+nix-fmt-check:
+    nix fmt -- --check .
+
 # --- bash --- #
 
 shfmt-config := "--indent 2 --simplify --space-redirects --language-dialect bash"

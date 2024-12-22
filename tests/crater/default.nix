@@ -943,25 +943,32 @@
   targetIsProcMacro = target:
     target.kind == ["lib"] && target.crate_types == ["proc-macro"];
 
-  mkPkgInfoDepFromPkgManifestDep = dep: {
-    default_features = dep.uses_default_features;
-    features = dep.features;
-    kind = if dep.kind == null then "normal" else dep.kind;
-    name = if dep.rename != null then dep.rename else dep.name;
-    optional = dep.optional;
-    package = dep.name;
-    req =
-      if dep.req == "*" then
-        null
-      else if hasPrefix "^" dep.req then
-        removePrefix "^" dep.req
-      else
-        dep.req;
-    source = dep.source;
-    target = dep.target;
-  } // optionalAttrs (dep.rename != null) {
-    rename = replaceStrings ["-"] ["_"] dep.rename;
-  };
+  mkPkgInfoDepFromPkgManifestDep = dep:
+    {
+      default_features = dep.uses_default_features;
+      features = dep.features;
+      kind =
+        if dep.kind == null
+        then "normal"
+        else dep.kind;
+      name =
+        if dep.rename != null
+        then dep.rename
+        else dep.name;
+      optional = dep.optional;
+      package = dep.name;
+      req =
+        if dep.req == "*"
+        then null
+        else if hasPrefix "^" dep.req
+        then removePrefix "^" dep.req
+        else dep.req;
+      source = dep.source;
+      target = dep.target;
+    }
+    // optionalAttrs (dep.rename != null) {
+      rename = replaceStrings ["-"] ["_"] dep.rename;
+    };
 
   # Create a nocargo `PkgInfo` from a `PkgManifest` (which closely matches the
   # cargo metadata output).
@@ -1116,7 +1123,7 @@ in {
         hash = "sha256-ahiydkkJHwUX13eiGh2aCRSofbxvevk22oKMgLMOl2g=";
       };
     in
-      pkgs.runCommandLocal "rand-patched" { src_raw = src'; } ''
+      pkgs.runCommandLocal "rand-patched" {src_raw = src';} ''
         mkdir -p $out
         cp -r $src_raw/* $out/
         cp $src_raw/Cargo.lock.msrv $out/Cargo.lock

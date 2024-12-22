@@ -61,6 +61,8 @@
 
     checks = eachSystem (system: self.tests.${system}.checks);
 
+    formatter = eachSystemPkgs (pkgs: pkgs.alejandra);
+
     _dbg = {
       systemPkgs = systemPkgs;
       systemNargoLib = systemNargoLib;

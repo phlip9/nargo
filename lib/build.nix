@@ -85,11 +85,8 @@
                       then kind
                       else "${kind}-${target.name}";
 
-                    maybePkgUnitsCustomBuild =
-                      if pkgUnits ? custom-build
-                      then pkgUnits.custom-build
-                      # then "${pkgId} > ${featFor} > custom-build"
-                      else null;
+                    maybePkgUnitsCustomBuild = pkgUnits.custom-build or null;
+                    # "${pkgId} > ${featFor} > custom-build"
 
                     # the build-script unit (or null), but only if we're not the
                     # build-script itself. we separate this case from the other
@@ -216,7 +213,7 @@
     else targetCfg.evalCfgExpr cfgs (targetCfg.parseTargetCfgExpr pkgDepKind.target);
 
   _pkgContainsProcMacroTarget = pkg:
-    (pkg ? build) && (pkg.build.lib.target.is_proc_macro);
+    (pkg ? build) && pkg.build.lib.target.is_proc_macro;
 
   _mkTargetDep = depName: unit: target: {
     crate_name = target.crate_name;
