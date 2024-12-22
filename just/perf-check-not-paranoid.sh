@@ -9,15 +9,15 @@ check() {
   file="$1"
   expected="$2"
   why="$3"
-  if [[ ! -f "$file" ]]; then
+  if [[ ! -f $file ]]; then
     eprintln "error: can't find file $file"
     eprintln ""
     eprintln "suggestion: ensure your Linux kernel supports perf events"
     exit 1
   fi
 
-  actual="$(< $file)"
-  if [[ "$actual" != "$expected" ]]; then
+  actual="$(< "$file")"
+  if [[ $actual != "$expected" ]]; then
     eprintln "error: you need to $why"
     eprintln ""
     eprintln "      file: $file"

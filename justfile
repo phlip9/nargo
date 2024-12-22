@@ -80,6 +80,28 @@ diff-clean-metadata-manifests pkg:
         <(just clean-cargo-metadata "{{ pkg }}") \
         <(just clean-workspace-manifests "{{ pkg }}")
 
+# --- bash --- #
+
+shfmt-config := "--indent 2 --simplify --space-redirects --language-dialect bash"
+shellcheck-config := "--shell=bash"
+
+bash-fmt:
+    nix develop .#bash-lint --command \
+      fd --extension "sh" --exec-batch \
+        shfmt {{ shfmt-config }} --list --write
+
+bash-fmt-check:
+    nix develop .#bash-lint --command \
+      fd --extension "sh" --exec-batch \
+        shfmt {{ shfmt-config }} --diff
+
+bash-lint:
+    nix develop .#bash-lint --command \
+      fd --extension "sh" --exec-batch \
+        shellcheck {{ shellcheck-config }}
+
+# --- profiling/benchmarking --- #
+
 nix-build-profiling drv:
     time -v nix build --rebuild --log-format internal-json --debug {{ drv }} 2>&1 \
         | ts -s -m "[%.s]" \

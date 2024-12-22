@@ -27,13 +27,28 @@
       nargo = systemNargoLib;
     };
 
-    packages = eachSystem (system: {
-      nargo-metadata = systemNargoLib.${system}.nargo-metadata;
-      nargo-resolve = systemNargoLib.${system}.nargo-resolve;
-      nargo-rustc = systemNargoLib.${system}.nargo-rustc;
+    packages = eachSystem (system: let
+      nargoLib = systemNargoLib.${system};
+    in {
+      nargo-metadata = nargoLib.nargo-metadata;
+      nargo-resolve = nargoLib.nargo-resolve;
+      nargo-rustc = nargoLib.nargo-rustc;
 
-      nixprof = systemNargoLib.${system}.nixprof;
+      nixprof = nargoLib.nixprof;
     });
+
+    devShells = eachSystem (
+      system: let
+        nargoLib = systemNargoLib.${system};
+        pkgs = systemPkgs.${system};
+        mkMinShell = nargoLib.mkMinShell;
+      in {
+        bash-lint = mkMinShell {
+          name = "bash-lint";
+          packages = [pkgs.fd pkgs.shellcheck pkgs.shfmt];
+        };
+      }
+    );
 
     tests = eachSystem (system:
       import ./tests {
@@ -47,7 +62,8 @@
     checks = eachSystem (system: self.tests.${system}.checks);
 
     _dbg = {
-      pkgs = systemPkgs;
+      systemPkgs = systemPkgs;
+      systemNargoLib = systemNargoLib;
     };
   };
 }

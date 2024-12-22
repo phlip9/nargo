@@ -11,7 +11,7 @@ samply="$(which samply)"
 # stops the nix-daemon profiler
 bg_profiler_pid=""
 stop_samply_nix_daemon() {
-  if [[ ! -z "$bg_profiler_pid" ]]; then
+  if [[ -n $bg_profiler_pid ]]; then
     sudo kill -SIGINT $bg_profiler_pid
     wait $bg_profiler_pid
   fi
@@ -21,8 +21,8 @@ stop_samply_nix_daemon() {
 trap stop_samply_nix_daemon EXIT
 
 # start profiling the nix-daemon process in the background
-sudo $samply record \
-  --pid $nixd_pid \
+sudo "$samply" record \
+  --pid "$nixd_pid" \
   --rate $sample_rate \
   --cswitch-markers \
   --save-only \
@@ -34,17 +34,17 @@ bg_profiler_pid=$!
 sleep 1s
 
 # profile the cmd
-sudo $(which samply) record \
+sudo "$samply" record \
   --rate $sample_rate \
   --cswitch-markers \
   --save-only \
   --output profile.nix.json.gz \
-  -- $nix "$@"
+  -- "$nix" "$@"
 
 # stop the background profiler and clear the trap
 stop_samply_nix_daemon
 trap - EXIT
 
 # make profile and nix output link user-owned
-sudo chown --no-dereference $USER:$USER profile.*.json.gz result*
+sudo chown --no-dereference "$USER:$USER" profile.*.json.gz result*
 chmod a+r profile.*.json.gz
