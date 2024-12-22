@@ -37,6 +37,9 @@ lib.makeScope pkgs.newScope (self: {
   # Generate a `Cargo.build-plan.nix`.
   generateCargoBuildPlan = self.callPackage ./generateCargoBuildPlan.nix {};
 
+  # Minimal `pkgs.mkShellNoCC` for `nix develop`
+  mkMinShell = import ./mkMinShell.nix {pkgs = pkgs;};
+
   # The Rust binary used to generate the `Cargo.metadata.json` file.
   nargo-metadata = self.callPackage ./nargo-metadata.nix {};
 
