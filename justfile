@@ -1,7 +1,3 @@
-# auto-format the `justfile`
-just-fmt:
-    just --fmt --unstable
-
 # Generate Cargo.metadata.json file
 cargo-metadata-json:
     cargo metadata --format-version=1 --all-features \
@@ -79,6 +75,14 @@ diff-clean-metadata-manifests pkg:
     diff --unified=10 --color=always \
         <(just clean-cargo-metadata "{{ pkg }}") \
         <(just clean-workspace-manifests "{{ pkg }}")
+
+# --- just --- #
+
+just-fmt:
+    just --fmt --unstable
+
+just-fmt-check:
+    just --fmt --unstable --check
 
 # --- nix --- #
 

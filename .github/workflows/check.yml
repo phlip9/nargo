@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  merge_group:
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref_name }}"
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  just-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@just
+      - run: just just-fmt-check
+
+  bash-fmt-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@just
+      - uses: DeterminateSystems/nix-installer-action@main
+      - run: just bash-fmt-check
+      - run: just bash-lint
+
+  nix-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@just
+      - uses: DeterminateSystems/nix-installer-action@main
+      - run: just nix-fmt-check
