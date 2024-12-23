@@ -76,6 +76,14 @@ diff-clean-metadata-manifests pkg:
         <(just clean-cargo-metadata "{{ pkg }}") \
         <(just clean-workspace-manifests "{{ pkg }}")
 
+# --- rust --- #
+
+rust-fmt:
+    cargo fmt --all
+
+rust-fmt-check:
+    cargo fmt --all --check
+
 # --- just --- #
 
 just-fmt:
