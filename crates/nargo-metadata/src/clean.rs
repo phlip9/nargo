@@ -1,8 +1,9 @@
-use nargo_core::{nargo, error::Context as _};
+use nargo_core::{error::Context as _, nargo};
 
 use crate::input::{self, DepKind, PkgId};
 
-const CRATES_IO_REGISTRY: &str = "registry+https://github.com/rust-lang/crates.io-index";
+const CRATES_IO_REGISTRY: &str =
+    "registry+https://github.com/rust-lang/crates.io-index";
 
 #[derive(Copy, Clone)]
 pub struct Context<'a> {
@@ -57,8 +58,9 @@ impl<'a> input::Manifest<'a> {
         }
 
         self.dependencies.sort_unstable_by(|d1, d2| {
-            d1.name.cmp(d2.name)
-            .then_with(|| d1.kind.cmp(&d2.kind))
+            d1.name
+                .cmp(d2.name)
+                .then_with(|| d1.kind.cmp(&d2.kind))
                 .then_with(|| d1.target.cmp(&d2.target))
         });
     }
@@ -68,7 +70,11 @@ impl<'a> input::Manifest<'a> {
         // non-workspace crates.
         if !self.is_workspace_pkg() {
             self.targets.retain(|target| {
-                target.kind.iter().any(|&kind| kind == "lib" || kind == "proc-macro" || kind == "custom-build")
+                target.kind.iter().any(|&kind| {
+                    kind == "lib"
+                        || kind == "proc-macro"
+                        || kind == "custom-build"
+                })
             });
         }
 
@@ -81,7 +87,8 @@ impl<'a> input::Manifest<'a> {
         // non-deterministic (read: filesystem dependent), so we need to sort them
         // first.
         self.targets.sort_unstable_by(|t1, t2| {
-            t1.kind.cmp(&t2.kind)
+            t1.kind
+                .cmp(&t2.kind)
                 .then_with(|| t1.crate_types.cmp(&t2.crate_types))
                 .then_with(|| t1.name.cmp(t2.name))
         });
@@ -119,14 +126,10 @@ impl<'a> input::ManifestDependency<'a> {
 //
 
 impl<'a> input::ManifestTarget<'a> {
-    fn clean(
-        &mut self,
-        id: PkgId<'a>,
-        manifest_dir: &'a str,
-    ) {
+    fn clean(&mut self, id: PkgId<'a>, manifest_dir: &'a str) {
         let src_path = self.src_path;
 
-        self.src_path = 
+        self.src_path =
             src_path
             .strip_prefix(manifest_dir)
             .with_context(|| format!(
