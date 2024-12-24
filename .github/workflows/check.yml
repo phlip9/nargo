@@ -18,6 +18,15 @@ defaults:
     shell: bash
 
 jobs:
+  rust-lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@just
+      - uses: Swatinem/rust-cache@v2
+      - run: just rust-lint --locked
+      - run: just rust-test --locked
+
   rust-fmt:
     runs-on: ubuntu-latest
     steps:

@@ -1,3 +1,7 @@
+alias cmg := cargo-metadata-json
+alias rl := rust-lint
+alias rt := rust-test
+
 # Generate Cargo.metadata.json file
 cargo-metadata-json:
     cargo metadata --format-version=1 --all-features \
@@ -78,11 +82,19 @@ diff-clean-metadata-manifests pkg:
 
 # --- rust --- #
 
+rust-lint *args:
+    cargo clippy --workspace --all-targets {{ args }}
+    cargo clippy -p nargo-rustc --bin nargo-rustc {{ args }}
+    cargo clippy -p nargo-metadata --bin nargo-metadata {{ args }}
+
 rust-fmt:
     cargo fmt --all
 
 rust-fmt-check:
     cargo fmt --all --check
+
+rust-test *args:
+    cargo test --lib {{ args }}
 
 # --- just --- #
 
