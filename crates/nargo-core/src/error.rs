@@ -8,6 +8,7 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 // TODO(phlip9): maybe one day this can be a thin pointer String
 #[allow(clippy::box_collection)] // It's important this only takes 1 word
+#[derive(Clone)]
 #[repr(transparent)]
 pub struct Error(pub Box<String>);
 
@@ -25,8 +26,12 @@ pub trait Context<T, E> {
 //
 
 impl Error {
+    #[inline]
+    pub fn from_string(msg: String) -> Self {
+        Self(Box::new(msg))
+    }
     pub fn from_display(err: impl fmt::Display) -> Self {
-        Self(Box::new(err.to_string()))
+        Self::from_string(err.to_string())
     }
 }
 
@@ -35,11 +40,13 @@ const _: [(); std::mem::size_of::<*const ()>()] =
     [(); std::mem::size_of::<Error>()];
 
 impl fmt::Display for Error {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
 }
 impl fmt::Debug for Error {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self, f)
     }
@@ -48,7 +55,7 @@ impl fmt::Debug for Error {
 impl<E: StdError> From<E> for Error {
     #[cold]
     fn from(value: E) -> Self {
-        Self(Box::new(value.to_string()))
+        Self::from_string(value.to_string())
     }
 }
 
@@ -133,15 +140,19 @@ macro_rules! format_err {
 
 #[cfg(test)]
 mod test {
-    use super::Context;
+    use super::*;
 
     #[test]
+    #[allow(clippy::unnecessary_literal_unwrap)]
     fn error() {
-        let result = crate::fs::read_existing_file(std::path::Path::new(
-            "aosdifjoasidjfoiasjf",
-        ))
-        .context("failed to foobar");
+        let result: Result<(), _> =
+            Err(Error::from_string("this is an error".to_owned()));
+        let result2 = result.clone().context("some context");
 
-        result.expect("failed baz process");
+        assert_eq!(result.unwrap_err().to_string(), "this is an error");
+        assert_eq!(
+            result2.unwrap_err().to_string(),
+            "some context: this is an error"
+        );
     }
 }
