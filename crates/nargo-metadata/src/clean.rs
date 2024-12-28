@@ -193,7 +193,7 @@ impl<'a> input::PkgId<'a> {
 // --- impl Source ---
 //
 
-impl<'a> input::Source<'a> {
+impl input::Source<'_> {
     fn clean(&mut self) {
         if self.0 == CRATES_IO_REGISTRY {
             self.0 = "crates.io"

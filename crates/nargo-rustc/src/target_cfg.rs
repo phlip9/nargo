@@ -113,7 +113,7 @@ fn strip_quotes(s: &str) -> Option<&str> {
     s.strip_prefix('\"').and_then(|s2| s2.strip_suffix('\"'))
 }
 
-impl<'a> Cfg<'a> {
+impl Cfg<'_> {
     pub(crate) fn write_env_key(&self, out: &mut String) {
         out.push_str("CARGO_CFG_");
         for c in self.key.chars() {

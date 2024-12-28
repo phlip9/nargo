@@ -37,9 +37,9 @@ pub enum VarErrorKind {
 // --- impl VarError ---
 //
 
-impl<'a> Error for VarError<'a> {}
+impl Error for VarError<'_> {}
 
-impl<'a> fmt::Display for VarError<'a> {
+impl fmt::Display for VarError<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self.kind {
             VarErrorKind::Missing => "missing env var: ",
@@ -49,7 +49,7 @@ impl<'a> fmt::Display for VarError<'a> {
         f.write_str(self.key)
     }
 }
-impl<'a> fmt::Debug for VarError<'a> {
+impl fmt::Debug for VarError<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self, f)
     }

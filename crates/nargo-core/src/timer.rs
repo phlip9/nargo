@@ -18,7 +18,7 @@ impl<'a> Timer<'a> {
     }
 }
 
-impl<'a> Drop for Timer<'a> {
+impl Drop for Timer<'_> {
     fn drop(&mut self) {
         if (self.level as u8) <= logger::max_level() {
             logger::log(format_args!(

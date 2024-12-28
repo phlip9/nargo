@@ -641,7 +641,7 @@ impl<'a> BuildContext<'a> {
 // --- impl Target ---
 //
 
-impl<'a> Target<'a> {
+impl Target<'_> {
     fn is_lib(&self) -> bool {
         self.kind == TargetKind::Lib
     }

@@ -116,12 +116,12 @@ fn parse_numeric(s: &str) -> Option<u64> {
     }
 }
 
-impl<'a> fmt::Display for Version<'a> {
+impl fmt::Display for Version<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
 }
-impl<'a> fmt::Debug for Version<'a> {
+impl fmt::Debug for Version<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self, f)
     }

@@ -33,7 +33,7 @@ pub struct PkgFeatForActivation<'a> {
 
 // --- impl PkgId --- //
 
-impl<'a> fmt::Display for PkgId<'a> {
+impl fmt::Display for PkgId<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.0)
     }

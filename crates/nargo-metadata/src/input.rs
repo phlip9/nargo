@@ -255,7 +255,7 @@ impl<'de> serde::Deserialize<'de> for DepKind {
 // --- impl PkgId ---
 //
 
-impl<'a> fmt::Display for PkgId<'a> {
+impl fmt::Display for PkgId<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.0)
     }
@@ -265,7 +265,7 @@ impl<'a> fmt::Display for PkgId<'a> {
 // --- impl Source ---
 //
 
-impl<'a> Source<'a> {
+impl Source<'_> {
     pub const CRATES_IO: Self = Self("crates.io");
 
     pub fn strip_locked(&self) -> Self {
@@ -285,21 +285,21 @@ impl<'a> Source<'a> {
 // --- impl Platform ---
 //
 
-impl<'a> cmp::Eq for Platform<'a> {}
+impl cmp::Eq for Platform<'_> {}
 
-impl<'a> cmp::PartialEq for Platform<'a> {
+impl cmp::PartialEq for Platform<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.0.get() == other.0.get()
     }
 }
 
-impl<'a> cmp::Ord for Platform<'a> {
+impl cmp::Ord for Platform<'_> {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.0.get().cmp(other.0.get())
     }
 }
 
-impl<'a> cmp::PartialOrd for Platform<'a> {
+impl cmp::PartialOrd for Platform<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
