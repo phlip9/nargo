@@ -180,6 +180,7 @@ in {
 
   crane-utils = mkCraneExample "pkgs/crane-utils";
 
+  # TODO(phlip9): support cargo bindeps
   # crane-bindeps = mkCraneExample "checks/bindeps";
   crane-bzip2-sys = mkCraneExample "checks/bzip2-sys";
   crane-clippytest = mkCraneExample "checks/clippy/clippytest";
@@ -205,7 +206,6 @@ in {
   crane-simple-with-audit-toml = mkCraneExample "checks/simple-with-audit-toml";
   crane-simple-with-deny-toml = mkCraneExample "checks/simple-with-deny-toml";
   crane-trunk = mkCraneExample "checks/trunk";
-  crane-trunk-outdated-bindgen = mkCraneExample "checks/trunk-outdated-bindgen";
   crane-various-targets = mkCraneExample "checks/various-targets";
   crane-with-build-script = mkCraneExample "checks/with-build-script";
   crane-with-build-script-custom = mkCraneExample "checks/with-build-script-custom";
