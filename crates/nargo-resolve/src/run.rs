@@ -1,4 +1,4 @@
-use assert_json_diff::assert_json_eq;
+use assert_json_diff::{assert_json_matches_no_panic, CompareMode};
 use nargo_core::time;
 
 use crate::{resolve::ResolveFeatures, unit_graph::UnitGraph};
@@ -34,6 +34,48 @@ pub fn run(
 
     time!(
         "compare",
-        assert_json_eq!(nargo_resolve_features, cargo_resolve_features),
+        compare_resolve_features(
+            &nargo_resolve_features,
+            &cargo_resolve_features,
+        ),
     );
+}
+
+fn compare_resolve_features(
+    nargo_resolve_features: &ResolveFeatures<'_>,
+    cargo_resolve_features: &ResolveFeatures<'_>,
+) {
+    let result = assert_json_matches_no_panic(
+        nargo_resolve_features,
+        cargo_resolve_features,
+        assert_json_diff::Config::new(CompareMode::Strict),
+    );
+
+    if let Err(diff_msg) = result {
+        let nargo_json =
+            serde_json::to_string_pretty(nargo_resolve_features).unwrap();
+        let cargo_json =
+            serde_json::to_string_pretty(cargo_resolve_features).unwrap();
+
+        panic!(
+            "feature resolution mismatch b/w nargo and cargo:
+#
+# nargo:
+#
+```json
+{nargo_json}
+```
+#
+# cargo:
+#
+```json
+{cargo_json}
+```
+#
+# diff:
+#
+{diff_msg}
+#"
+        );
+    }
 }
