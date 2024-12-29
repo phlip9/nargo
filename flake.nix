@@ -47,6 +47,11 @@
           name = "bash-lint";
           packages = [pkgs.fd pkgs.shellcheck pkgs.shfmt];
         };
+
+        nix-test = mkMinShell {
+          name = "nix-test";
+          packages = [pkgs.nix-fast-build];
+        };
       }
     );
 

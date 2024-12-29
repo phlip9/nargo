@@ -112,6 +112,14 @@ nix-fmt:
 nix-fmt-check:
     nix fmt -- --check .
 
+nix-current-system:
+    @nix eval --raw --impure --expr builtins.currentSystem
+
+nix-test:
+    nix develop .#nix-test --command \
+      nix-fast-build --skip-cached --no-link \
+        --flake .#checks.$(just nix-current-system)
+
 # --- bash --- #
 
 shfmt-config := "--indent 2 --simplify --space-redirects --language-dialect bash"
