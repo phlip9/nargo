@@ -75,10 +75,16 @@
           cargoSrc = "${srcCleaned}";
         };
 
-        # Expose `resolveFeaturesJson` in the derivation as a file with path
-        # `$resolveFeaturesJsonPath`.
-        resolveFeaturesJson = builtins.toJSON resolveFeatures;
-        passAsFile = ["resolveFeaturesJson"];
+        # TODO(phlip9): this is more space-efficient, but harder to debug since
+        # the file path is an ephemeral /build/.attr-<hash> path.
+        # # Expose `resolveFeaturesJson` in the derivation as a file with path
+        # # `$resolveFeaturesJsonPath`.
+        # resolveFeaturesJson = builtins.toJSON resolveFeatures;
+        # passAsFile = ["resolveFeaturesJson"];
+
+        # Write the resolved features into a separate derivation so I can easily
+        # copy-paste the `nargo-resolve` invocation when debugging.
+        resolveFeaturesJsonPath = builtins.toFile "${name}-resolve.json" (builtins.toJSON resolveFeatures);
       } ''
         mkdir "$out"
 
