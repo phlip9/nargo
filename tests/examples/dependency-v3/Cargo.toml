@@ -7,5 +7,8 @@ edition = "2021"
 cratesio = { package = "semver", version = "1" }
 git-tag = { package = "semver", git = "https://github.com/dtolnay/semver", tag = "1.0.0" }
 git-branch = { package = "semver", git = "http://github.com/dtolnay/semver", branch = "master" }
-git-rev = { package = "semver", git = "ssh://git@github.com/dtolnay/semver", rev = "a2ce5777dcd455246e4650e36dde8e2e96fcb3fd" }
-git-head = { package = "semver", git = "ssh://git@github.com/dtolnay/semver" }
+# TODO(phlip9): fix so garnix CI can fetch these:
+# > git@github.com: Permission denied (publickey).
+# > fatal: Could not read from remote repository.
+# git-rev = { package = "semver", git = "ssh://git@github.com/dtolnay/semver", rev = "a2ce5777dcd455246e4650e36dde8e2e96fcb3fd" }
+# git-head = { package = "semver", git = "ssh://git@github.com/dtolnay/semver" }
