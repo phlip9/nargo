@@ -95,12 +95,14 @@ impl<'a> UnitGraph<'a> {
             if unit.mode != "build" {
                 continue;
             }
+
+            // We only want `TargetKind::Lib(_) | TargetKind::Bin` targets here.
+            // We'll check for the negation here b/c it's easier.
+            // see `impl Serialize for TargetKind` in cargo src.
             let target_kinds = &unit.target.kind;
-            if !(target_kinds.contains(&"lib")
-                || target_kinds.contains(&"proc-macro")
-                || target_kinds.contains(&"bin"))
-            {
-                continue;
+            match target_kinds.as_slice() {
+                ["bench" | "custom-build" | "example" | "test"] => continue,
+                _ => (),
             }
 
             let unit_pkg_id = unit.pkg_id;
