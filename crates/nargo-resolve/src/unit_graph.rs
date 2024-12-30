@@ -1,9 +1,9 @@
 //! `cargo build --unit-graph` JSON types
 
 use std::{
+    borrow::Cow,
     collections::{btree_map::Entry, BTreeMap},
-    ffi::OsStr,
-    path::Path,
+    fmt::{self, Write},
 };
 
 use nargo_core::{error::Context as _, nargo};
@@ -226,23 +226,29 @@ impl<'a> CargoPkgId<'a> {
     fn to_pkg_id_spec(&self) -> String {
         let mut out = String::new();
 
+        let mut source_id = Cow::Borrowed(self.source_id);
         let mut source_id_includes_name = false;
 
-        // TODO(phlip9): actually parse as a URI
-        if let Some(path) = self.source_id.strip_prefix("path+file://") {
-            if Path::new(path).file_name().unwrap_or(OsStr::new(""))
-                == self.name
-            {
-                source_id_includes_name = true
+        if let Some(mut url) = Url::parse(&source_id) {
+            // if the last path segment is the package name, then cargo doesn't
+            // include the package name in the suffix
+            let last_segment =
+                url.authority_path.rsplit_once('/').map(|xy| xy.1);
+            source_id_includes_name = last_segment == Some(self.name);
+
+            // cargo also strips the url fragment (?)
+            if url.fragment.is_some() {
+                url.fragment = None;
+                source_id = Cow::Owned(url.to_string());
             }
         }
 
         if source_id_includes_name {
-            out.push_str(self.source_id);
+            out.push_str(&source_id);
             out.push('#');
             out.push_str(self.version)
         } else {
-            out.push_str(self.source_id);
+            out.push_str(&source_id);
             out.push('#');
             out.push_str(self.name);
             out.push('@');
@@ -250,6 +256,55 @@ impl<'a> CargoPkgId<'a> {
         }
 
         out
+    }
+}
+
+/// A (technically non-compliant) parsed URL.
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
+struct Url<'a> {
+    scheme: &'a str,
+    authority_path: &'a str,
+    query: Option<&'a str>,
+    fragment: Option<&'a str>,
+}
+
+impl<'a> Url<'a> {
+    fn parse(s: &'a str) -> Option<Self> {
+        let (scheme, rest) = s.split_once("://")?;
+        let (rest, fragment) = match rest.rsplit_once('#') {
+            Some((rest, fragment)) => (rest, Some(fragment)),
+            None => (rest, None),
+        };
+        let (authority_path, query) = match rest.rsplit_once('?') {
+            Some((rest, query)) => (rest, Some(query)),
+            None => (rest, None),
+        };
+        Some(Url {
+            scheme,
+            authority_path,
+            query,
+            fragment,
+        })
+    }
+}
+
+impl fmt::Display for Url<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.scheme)?;
+        f.write_str("://")?;
+
+        f.write_str(self.authority_path)?;
+
+        if let Some(query) = self.query {
+            f.write_char('?')?;
+            f.write_str(query)?;
+        }
+
+        if let Some(fragment) = self.fragment {
+            f.write_char('#')?;
+            f.write_str(fragment)?;
+        }
+        Ok(())
     }
 }
 
@@ -284,20 +339,142 @@ mod test {
 
     #[test]
     fn test_cargo_pkg_id_to_pkg_id_spec() {
-        assert_eq!(
-            CargoPkgId::parse("unicode-ident 1.0.12 (registry+https://github.com/rust-lang/crates.io-index)").unwrap()
-                .to_pkg_id_spec(),
+        #[track_caller]
+        fn ok(
+            input: &str,
+            workspace_root: &str,
+            expected_cargo_pkg_id_spec: &str,
+            expected_nargo_pkg_id: &str,
+        ) {
+            let cargo_pkg_id = CargoPkgId::parse(input).unwrap();
+            let actual_cargo_pkg_id_spec = cargo_pkg_id.to_pkg_id_spec();
+            let actual_nargo_pkg_id = nargo::PkgId::try_from_cargo_pkg_id(
+                &actual_cargo_pkg_id_spec,
+                workspace_root,
+            );
+            assert_eq!(
+                (actual_cargo_pkg_id_spec.as_str(), actual_nargo_pkg_id.0),
+                (expected_cargo_pkg_id_spec, expected_nargo_pkg_id),
+                "input: {input:?}"
+            );
+        }
+
+        ok(
+            "unicode-ident 1.0.12 (registry+https://github.com/rust-lang/crates.io-index)",
+            "",
             "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.12",
+            "#unicode-ident@1.0.12",
         );
-        assert_eq!(
-            CargoPkgId::parse("nargo-metadata 0.1.0 (path+file:///home/phlip9/dev/nargo/crates/nargo-metadata)").unwrap()
-                .to_pkg_id_spec(),
+        ok(
+            "nargo-metadata 0.1.0 (path+file:///home/phlip9/dev/nargo/crates/nargo-metadata)",
+            "/home/phlip9/dev/nargo",
             "path+file:///home/phlip9/dev/nargo/crates/nargo-metadata#0.1.0",
+            "crates/nargo-metadata#0.1.0",
         );
-        assert_eq!(
-            CargoPkgId::parse("dependencies 0.0.0 (path+file:///nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source)").unwrap()
-                .to_pkg_id_spec(),
+        ok(
+            "dependencies 0.0.0 (path+file:///nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source)",
+            "/nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source",
             "path+file:///nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source#dependencies@0.0.0",
+            "dependencies@0.0.0",
+        );
+        ok(
+            "semver 1.0.12 (registry+https://github.com/rust-lang/crates.io-index)",
+            "",
+            "registry+https://github.com/rust-lang/crates.io-index#semver@1.0.12",
+            "#semver@1.0.12",
+        );
+        ok(
+            "semver 1.0.0 (git+https://github.com/dtolnay/semver?tag=1.0.0#a2ce5777dcd455246e4650e36dde8e2e96fcb3fd)",
+            "",
+            "git+https://github.com/dtolnay/semver?tag=1.0.0#1.0.0",
+            "git+https://github.com/dtolnay/semver?tag=1.0.0#1.0.0",
+        );
+        ok(
+            "semver 1.0.12 (git+http://github.com/dtolnay/semver?branch=master#a6425e6f41ddc81c6d6dd60c68248e0f0ef046c7)",
+            "",
+            "git+http://github.com/dtolnay/semver?branch=master#1.0.12",
+            "git+http://github.com/dtolnay/semver?branch=master#1.0.12",
+        );
+        ok(
+            "semver 1.0.0 (git+ssh://git@github.com/dtolnay/semver?rev=a2ce5777dcd455246e4650e36dde8e2e96fcb3fd#a2ce5777dcd455246e4650e36dde8e2e96fcb3fd)",
+            "",
+            "git+ssh://git@github.com/dtolnay/semver?rev=a2ce5777dcd455246e4650e36dde8e2e96fcb3fd#1.0.0",
+            "git+ssh://git@github.com/dtolnay/semver?rev=a2ce5777dcd455246e4650e36dde8e2e96fcb3fd#1.0.0",
+        );
+        ok(
+            "semver 1.0.12 (git+ssh://git@github.com/dtolnay/semver#a6425e6f41ddc81c6d6dd60c68248e0f0ef046c7)",
+            "",
+            "git+ssh://git@github.com/dtolnay/semver#1.0.12",
+            "git+ssh://git@github.com/dtolnay/semver#1.0.12",
+        );
+    }
+
+    #[test]
+    fn test_url() {
+        #[track_caller]
+        fn ok(input: &str, expected: Url<'_>) {
+            let actual = Url::parse(input).unwrap();
+            assert_eq!(actual, expected, "input: {input:?}");
+
+            let actual_display = actual.to_string();
+            let expected_display = expected.to_string();
+            assert_eq!(input, actual_display);
+            assert_eq!(input, expected_display);
+        }
+
+        ok(
+            "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.12",
+            Url {
+                scheme: "registry+https",
+                authority_path: "github.com/rust-lang/crates.io-index",
+                query: None,
+                fragment: Some("unicode-ident@1.0.12"),
+            }
+        );
+        ok(
+            "path+file:///home/phlip9/dev/nargo/crates/nargo-metadata",
+            Url {
+                scheme: "path+file",
+                authority_path: "/home/phlip9/dev/nargo/crates/nargo-metadata",
+                query: None,
+                fragment: None,
+            },
+        );
+        ok(
+            "git+https://github.com/dtolnay/semver?tag=1.0.0#a2ce5777dcd455246e4650e36dde8e2e96fcb3fd",
+            Url {
+                scheme: "git+https",
+                authority_path: "github.com/dtolnay/semver",
+                query: Some("tag=1.0.0"),
+                fragment: Some("a2ce5777dcd455246e4650e36dde8e2e96fcb3fd"),
+            },
+        );
+        ok(
+            "git+http://github.com/dtolnay/semver?branch=master#a6425e6f41ddc81c6d6dd60c68248e0f0ef046c7",
+            Url {
+                scheme: "git+http",
+                authority_path: "github.com/dtolnay/semver",
+                query: Some("branch=master"),
+                fragment: Some("a6425e6f41ddc81c6d6dd60c68248e0f0ef046c7"),
+            },
+        );
+        ok(
+            "git+ssh://git@github.com/dtolnay/semver?rev=a2ce5777dcd455246e4650e36dde8e2e96fcb3fd#a2ce5777dcd455246e4650e36dde8e2e96fcb3fd",
+            Url {
+                scheme: "git+ssh",
+                authority_path: "git@github.com/dtolnay/semver",
+                query: Some("rev=a2ce5777dcd455246e4650e36dde8e2e96fcb3fd"),
+                fragment: Some("a2ce5777dcd455246e4650e36dde8e2e96fcb3fd"),
+            },
+        );
+        ok(
+            "git+ssh://git@github.com/dtolnay/semver#a6425e6f41ddc81c6d6dd60c68248e0f0ef046c7",
+            Url {
+                scheme: "git+ssh",
+                authority_path: "git@github.com/dtolnay/semver",
+                query: None,
+                fragment: Some("a6425e6f41ddc81c6d6dd60c68248e0f0ef046c7"),
+            },
         );
     }
 }
