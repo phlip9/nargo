@@ -115,10 +115,23 @@ nix-fmt-check:
 nix-current-system:
     @nix eval --raw --impure --expr builtins.currentSystem
 
-nix-test:
+nix-fast-build *args:
     nix develop .#nix-test --command \
-      nix-fast-build --skip-cached --no-link \
-        --flake .#checks.$(just nix-current-system)
+      nix-fast-build {{ args }}
+
+nix-test *args:
+    just nix-fast-build --flake .#checks.$(just nix-current-system) {{ args }}
+
+# nix-test-ci:
+#     # disable nix output monitor (nom) for CI-friendly output
+#     just nix-test --no-nom
+
+# build top-level packages in GitHub Actions CI
+nix-build-gha-ci:
+    nix build -L --no-link \
+        .#nargo-rustc \
+        .#nargo-metadata \
+        '.#nargo-metadata.built."crates/nargo-metadata#0.1.0".normal.bin-nargo-metadata'
 
 # --- bash --- #
 

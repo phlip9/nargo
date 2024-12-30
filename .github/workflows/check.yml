@@ -57,3 +57,12 @@ jobs:
       - uses: taiki-e/install-action@just
       - uses: DeterminateSystems/nix-installer-action@main
       - run: just nix-fmt-check
+
+  nix-build-gha:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@just
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - run: just nix-build-gha-ci
