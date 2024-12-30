@@ -100,9 +100,10 @@ impl<'a> UnitGraph<'a> {
             // We'll check for the negation here b/c it's easier.
             // see `impl Serialize for TargetKind` in cargo src.
             let target_kinds = &unit.target.kind;
-            match target_kinds.as_slice() {
-                ["bench" | "custom-build" | "example" | "test"] => continue,
-                _ => (),
+            if let ["bench" | "custom-build" | "example" | "test"] =
+                target_kinds.as_slice()
+            {
+                continue;
             }
 
             let unit_pkg_id = unit.pkg_id;
