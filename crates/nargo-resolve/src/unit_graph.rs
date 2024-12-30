@@ -6,7 +6,7 @@ use std::{
     fmt::{self, Write},
 };
 
-use nargo_core::{error::Context as _, nargo};
+use nargo_core::{error::Context, nargo};
 use serde::Deserialize;
 
 use crate::resolve;
@@ -299,7 +299,25 @@ impl fmt::Display for Url<'_> {
 
         if let Some(query) = self.query {
             f.write_char('?')?;
-            f.write_str(query)?;
+
+            // need to url-encode query string values
+            // TODO(phlip9): this is only true for cargo 1.83+ (?)
+            let mut is_first = true;
+            for query_kv in query.split('&') {
+                if is_first {
+                    is_first = false;
+                } else {
+                    f.write_char('&')?;
+                }
+
+                let (key, value) = query_kv.split_once('=').with_context(|| format!("invalid url query string, missing '=' in kv pair: '{query}'")).unwrap();
+
+                f.write_str(key)?;
+                f.write_char('=')?;
+
+                let value_encoded = url_encode::byte_serialize(value);
+                f.write_str(&value_encoded)?;
+            }
         }
 
         if let Some(fragment) = self.fragment {
@@ -307,6 +325,68 @@ impl fmt::Display for Url<'_> {
             f.write_str(fragment)?;
         }
         Ok(())
+    }
+}
+
+mod url_encode {
+    use std::{borrow::Cow, str};
+
+    // https://url.spec.whatwg.org/#concept-urlencoded-byte-serializer
+    pub fn byte_serialize(s: &str) -> Cow<'_, str> {
+        // check if this string contains any bytes that need to be encoded. o/w
+        // just return original.
+        let mut bs = s.as_bytes();
+        if bs.iter().all(|&b| byte_serialized_unchanged(b)) {
+            return Cow::Borrowed(s);
+        }
+
+        // iterate over the clean segments, separated by a byte that needs to be
+        // encoded. then url-encode that byte.
+        let mut out = String::with_capacity(s.len());
+        while let Some(idx) =
+            bs.iter().position(|&b| !byte_serialized_unchanged(b))
+        {
+            let (clean_prefix, suffix) = bs.split_at(idx);
+            let (byte, suffix_to_parse) = suffix.split_first().unwrap();
+            let byte = *byte;
+
+            out.push_str(str::from_utf8(clean_prefix).unwrap());
+
+            // encode byte
+            if byte == b' ' {
+                out.push('+');
+            } else {
+                out.push('%');
+                out.push(hex_encode_nibble(byte >> 4) as char);
+                out.push(hex_encode_nibble(byte & 0x0f) as char);
+            }
+
+            bs = suffix_to_parse;
+        }
+
+        // append the final clean segment
+        out.push_str(str::from_utf8(bs).unwrap());
+
+        Cow::Owned(out)
+    }
+
+    // Bytes that don't need to be url-encoded.
+    fn byte_serialized_unchanged(byte: u8) -> bool {
+        matches!(byte, b'*' | b'-' | b'.' | b'0' ..= b'9' | b'A' ..= b'Z' | b'_' | b'a' ..= b'z')
+    }
+
+    // Uppercase hex encode.
+    #[allow(non_upper_case_globals, non_snake_case)]
+    fn hex_encode_nibble(nib: u8) -> u8 {
+        const b_0: i16 = b'0' as i16;
+        const b_9: i16 = b'9' as i16;
+        const b_A: i16 = b'A' as i16;
+
+        let nib = nib as i16;
+        let base = nib + b_0;
+        // equiv: let gap_9A = if nib >= 10 { b'A' - b'9' - 1 } else { 0 };
+        let gap_9A = ((b_9 - b_0 - nib) >> 8) & (b_A - b_9 - 1);
+        (base + gap_9A) as u8
     }
 }
 
@@ -408,6 +488,12 @@ mod test {
             "",
             "git+ssh://git@github.com/dtolnay/semver#1.0.12",
             "git+ssh://git@github.com/dtolnay/semver#1.0.12",
+        );
+        ok(
+            "world 0.2.0 (git+https://github.com/ipetkov/crane-test-repo?branch=something/or/other#world@0.2.0)",
+            "",
+            "git+https://github.com/ipetkov/crane-test-repo?branch=something%2For%2Fother#world@0.2.0",
+            "git+https://github.com/ipetkov/crane-test-repo?branch=something%2For%2Fother#world@0.2.0",
         );
     }
 
