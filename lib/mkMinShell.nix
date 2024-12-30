@@ -11,13 +11,25 @@
 }: let
   # Need to filter out attrNames used above so we don't accidentally clobber
   # TODO(phlip9): make this an assert
-  envClean = builtins.removeAttrs env ["name" "system" "builder" "outputs" "stdenv" "packages" "shellHook"];
+  envClean = builtins.removeAttrs env [
+    "args"
+    "builder"
+    "name"
+    "outputs"
+    "packages"
+    "shellHook"
+    "stdenv"
+    "system"
+  ];
 in
   builtins.derivation ({
       name = name;
       system = pkgs.hostPlatform.system;
-      builder = "${pkgs.bash}/bin/bash";
       outputs = ["out"];
+      builder = "${pkgs.bash}/bin/bash";
+      # The args are ignored in `nix develop`, but we need to create an output
+      # to pass CI, which just builds the derivation.
+      args = ["-c" "echo -n '' > $out"];
 
       # Explanation:
       #

@@ -74,4 +74,8 @@
       value)
     examples;
   }));
+
+  # circumvent garnix's max 100-top-level-packages limit by making a giant
+  # symlink join over all checks, so they only count as one "package".
+  garnix-all-checks = pkgs.linkFarm "garnix-all-checks" checks;
 }

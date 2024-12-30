@@ -28,8 +28,12 @@
     };
 
     packages = eachSystem (system: let
+      tests = self.tests.${system};
       nargoLib = systemNargoLib.${system};
     in {
+      # smuggle this in via `packages` to get garnix to build it
+      garnix-all-checks = tests.garnix-all-checks;
+
       nargo-metadata = nargoLib.nargo-metadata;
       nargo-resolve = nargoLib.nargo-resolve;
       nargo-rustc = nargoLib.nargo-rustc;
