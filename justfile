@@ -96,6 +96,11 @@ rust-fmt-check:
 rust-test *args:
     cargo test --lib {{ args }}
 
+# regenerate the Cargo.lock files in all tests/examples
+rust-update-example-lockfiles:
+    fd "Cargo.toml" tests/examples --threads=6 --exec \
+        cargo generate-lockfile --manifest-path {}
+
 # --- just --- #
 
 just-fmt:
@@ -120,7 +125,8 @@ nix-fast-build *args:
       nix-fast-build {{ args }}
 
 nix-test *args:
-    just nix-fast-build --flake .#checks.$(just nix-current-system) {{ args }}
+    just nix-fast-build --no-link --skip-cached \
+        --flake .#checks.$(just nix-current-system) {{ args }}
 
 # nix-test-ci:
 #     # disable nix output monitor (nom) for CI-friendly output
