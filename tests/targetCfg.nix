@@ -169,6 +169,7 @@ in {
       target_env = "gnu";
       target_family = "unix";
       target_feature = ["fxsr" "sse" "sse2"];
+      target_has_atomic = ["16" "32" "64" "8" "ptr"];
       target_os = "linux";
       target_pointer_width = "64";
       target_vendor = "unknown";
@@ -183,6 +184,11 @@ in {
       target_feature="fxsr"
       target_feature="sse"
       target_feature="sse2"
+      target_has_atomic="16"
+      target_has_atomic="32"
+      target_has_atomic="64"
+      target_has_atomic="8"
+      target_has_atomic="ptr"
       target_os="linux"
       target_pointer_width="64"
       target_vendor="unknown"

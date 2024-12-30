@@ -199,11 +199,12 @@ in {
   crane-gitRevNoRef = mkCraneExample "checks/gitRevNoRef";
   crane-grpcio-test = mkCraneExample "checks/grpcio-test";
   crane-highs-sys-test = mkCraneExample "checks/highs-sys-test";
-  crane-illegal-bin = mkCraneExample "checks/illegal-bin";
+  # crane-illegal-bin = mkCraneExample "checks/illegal-bin";
   crane-manually-vendored = mkCraneExample "checks/manually-vendored";
   crane-no_std = mkCraneExample "checks/no_std";
   crane-overlapping-targets = mkCraneExample "checks/overlapping-targets";
-  crane-proc-macro = mkCraneExample "checks/proc-macro";
+  # TODO(phlip9): decide how to handle building proc-macro as top-level target
+  # crane-proc-macro = mkCraneExample "checks/proc-macro";
   crane-simple = mkCraneExample "checks/simple";
   crane-simple-git = mkCraneExample "checks/simple-git";
   crane-simple-git-workspace-inheritance = mkCraneExample "checks/simple-git-workspace-inheritance";

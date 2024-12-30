@@ -64,6 +64,8 @@ in rec {
     // optionalAttrs platform.isx86 {
       # These features are assume to be available.
       target_feature = ["fxsr" "sse" "sse2"];
+      # TODO(phlip9): be systematic about this
+      target_has_atomic = ["16" "32" "64" "8" "ptr"];
     }
     // optionalAttrs platform.isUnix {
       unix = true;
