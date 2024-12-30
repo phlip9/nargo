@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use nargo_core::{fs, logger, time};
 
@@ -22,8 +25,11 @@ FLAGS:
 
 OPTIONS:
   --input-raw-metadata PATH
-      Path to the raw `cargo metadata` json output. If left unset or set to "-",
-      then this is read from stdin.
+      Path to the raw `cargo metadata` json output. If set to "-", then this is
+      read from stdin. If left unset, we'll call `cargo metadata` directly.
+
+  --input-manifest-path PATH
+      Path to `Cargo.toml` manifest. Only used if `--input-raw-metadata` is unset.
 
   --input-current-metadata PATH
       Path to the current `Cargo.metadata.json`, if it exists. If left unset,
@@ -50,6 +56,7 @@ const VERSION: &str =
 
 pub struct Args {
     input_raw_metadata: Option<PathBuf>,
+    input_manifest_path: Option<PathBuf>,
     input_current_metadata: Option<PathBuf>,
     output_metadata: Option<PathBuf>,
     nix_prefetch: bool,
@@ -61,6 +68,7 @@ impl Args {
         use lexopt::prelude::*;
 
         let mut input_raw_metadata: Option<PathBuf> = None;
+        let mut input_manifest_path: Option<PathBuf> = None;
         let mut input_current_metadata: Option<PathBuf> = None;
         let mut output_metadata: Option<PathBuf> = None;
         let mut nix_prefetch = false;
@@ -83,6 +91,11 @@ impl Args {
                 Long("input-raw-metadata") if input_raw_metadata.is_none() => {
                     input_raw_metadata = Some(PathBuf::from(parser.value()?));
                 }
+                Long("input-manifest-path")
+                    if input_manifest_path.is_none() =>
+                {
+                    input_manifest_path = Some(PathBuf::from(parser.value()?));
+                }
                 Long("input-current-metadata")
                     if input_current_metadata.is_none() =>
                 {
@@ -104,6 +117,7 @@ impl Args {
 
         Ok(Args {
             input_raw_metadata,
+            input_manifest_path,
             input_current_metadata,
             output_metadata,
             nix_prefetch,
@@ -112,12 +126,11 @@ impl Args {
     }
 
     pub fn run(self) {
-        let input_raw_metadata_bytes = time!(
-            "read `cargo metadata` output",
-            fs::read_file_or_stdin(self.input_raw_metadata.as_deref())
-                .expect("Failed to read `cargo metadata` output")
-        );
+        // Run `cargo metadata` or read from an existing file/stdin.
+        let input_raw_metadata_bytes = self.read_input_raw_metadata();
 
+        // Read existing `Cargo.metadata.json` if it exists (from previous
+        // nargo-metadata output). We'll use this if we need to nix-prefetch.
         let input_current_metadata = self
             .input_current_metadata
             .as_deref()
@@ -138,5 +151,60 @@ impl Args {
         };
 
         time!("run", run::run(args));
+    }
+
+    /// Run `cargo metadata` or read from an existing file/stdin.
+    fn read_input_raw_metadata(&self) -> Vec<u8> {
+        // If `--input-raw-metadata` is set, read from it (file/stdin).
+        if let Some(path) = self.input_raw_metadata.as_deref() {
+            return time!(
+                "read `cargo metadata` output file",
+                fs::read_file_or_stdin(Some(path)).expect(
+                    "Failed to read file containing `cargo metadata` output",
+                ),
+            );
+        }
+
+        // Else, call `cargo metadata` directly
+        // $ cargo metadata \
+        //   --frozen \
+        //   --format-version=1 \
+        //   --all-features
+        let mut cmd = Command::new("cargo");
+        cmd.args([
+            "metadata",
+            "--frozen",
+            "--format-version=1",
+            "--all-features",
+        ]);
+
+        // --manifest-path ${self.input_manifest_path}
+        if let Some(manifest_path) = self.input_manifest_path.as_deref() {
+            cmd.arg("--manifest-path");
+            cmd.arg(manifest_path);
+        }
+
+        let output = time!(
+            "run `cargo metadata`",
+            cmd.output().expect("Failed to run `cargo`")
+        );
+
+        if !output.status.success() {
+            let code = output.status.code().unwrap_or(1);
+            panic!(
+                "`cargo metadata` failed with exit code: {code}\n\
+                 \n\
+                 > stdout:\n\
+                 {}\n\
+                 \n\
+                 > stderr: \n\
+                 {}\n\
+                 ",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
+        }
+
+        output.stdout
     }
 }

@@ -11,6 +11,38 @@
 
   targetCfg = import ./targetCfg.nix {inherit lib nargoLib;};
 
+  checks = builtins.listToAttrs (lib.flatten (_flattenTests "tests" {
+    targetCfg = targetCfg;
+    examples = builtins.mapAttrs (_: value:
+      builtins.intersectAttrs {
+        metadataDrv = null;
+        checkResolveFeatures = null;
+      }
+      value)
+    examples;
+  }));
+
+  # circumvent garnix's max 100-top-level-packages limit by making a giant
+  # symlink join over all checks, so they only count as one "package".
+  garnix-all-checks = pkgs.linkFarm "garnix-all-checks" checks;
+
+  _flattenTests = prefix: v:
+    if lib.isDerivation v
+    then {
+      name = prefix;
+      value = v;
+    }
+    else if lib.isType "assertion" v
+    then {
+      name = prefix;
+      value = v.fn prefix;
+    }
+    else if lib.isFunction v
+    then _flattenTests prefix (v _testFnArgs)
+    else if lib.isAttrs v
+    then lib.mapAttrsToList (name: _flattenTests "${prefix}-${name}") v
+    else throw "Unexpect test type: ${builtins.typeOf v}";
+
   _testFnArgs = {
     assertEq = got: expect: {
       _type = "assertion";
@@ -46,36 +78,4 @@
           '';
     };
   };
-
-  _flattenTests = prefix: v:
-    if lib.isDerivation v
-    then {
-      name = prefix;
-      value = v;
-    }
-    else if lib.isType "assertion" v
-    then {
-      name = prefix;
-      value = v.fn prefix;
-    }
-    else if lib.isFunction v
-    then _flattenTests prefix (v _testFnArgs)
-    else if lib.isAttrs v
-    then lib.mapAttrsToList (name: _flattenTests "${prefix}-${name}") v
-    else throw "Unexpect test type: ${builtins.typeOf v}";
-
-  checks = builtins.listToAttrs (lib.flatten (_flattenTests "tests" {
-    targetCfg = targetCfg;
-    examples = builtins.mapAttrs (_: value:
-      builtins.intersectAttrs {
-        metadataDrv = null;
-        checkResolveFeatures = null;
-      }
-      value)
-    examples;
-  }));
-
-  # circumvent garnix's max 100-top-level-packages limit by making a giant
-  # symlink join over all checks, so they only count as one "package".
-  garnix-all-checks = pkgs.linkFarm "garnix-all-checks" checks;
 }
