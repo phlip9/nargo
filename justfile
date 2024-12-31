@@ -1,13 +1,14 @@
-alias cmg := cargo-metadata-json
+alias nm := nargo-metadata
 alias rl := rust-lint
 alias rt := rust-test
 
-# Generate Cargo.metadata.json file
-cargo-metadata-json:
-    cargo run -p nargo-metadata -- \
-        --output-metadata Cargo.metadata.json \
-        --nix-prefetch \
-        --verbose
+# Generate `Cargo.metadata.json` file
+nargo-metadata *args:
+    cargo run -p nargo-metadata -- --output-metadata Cargo.metadata.json --nix-prefetch --verbose {{ args }}
+
+# Check that `Cargo.metadata.json` file remains unchanged
+nargo-metadata-check *args:
+    just nargo-metadata --check {{ args }}
 
 smoketest-pkg pkg:
     nix build -L --show-trace \
@@ -16,18 +17,6 @@ smoketest-pkg pkg:
 smoketest-pkg-dbg pkg:
     nix build -L --show-trace --debugger --impure --ignore-try \
         .#tests.x86_64-linux.examples."{{ pkg }}".checkResolveFeatures
-
-smoketest:
-    just smoketest-pkg features
-    just smoketest-pkg workspace-inline
-    just smoketest-pkg pkg-targets
-    # just smoketest-pkg dependency-v3
-    just smoketest-pkg fd
-    just smoketest-pkg rage
-    just smoketest-pkg ripgrep
-    just smoketest-pkg hickory-dns
-    just smoketest-pkg cargo-hack
-    just smoketest-pkg rand
 
 # Run nargo-resolve test on local workspace
 nargo-resolve-workspace:

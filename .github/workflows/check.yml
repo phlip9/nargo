@@ -26,6 +26,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: just rust-lint --locked -- -D warnings
       - run: just rust-test --locked
+      - run: just nargo-metadata-check
 
   rust-fmt:
     runs-on: ubuntu-latest
