@@ -49,6 +49,10 @@ OPTIONS:
 
       Typically used when run inside the `nix build` sandbox, where the crates
       are already vendored using something like `crane.vendorCargoDeps`.
+
+  --check
+      Generate the new `Cargo.metadata.json` but don't write it. Instead just
+      check that it matches the current `Cargo.metadata.json`.
 "#;
 
 const VERSION: &str =
@@ -61,6 +65,7 @@ pub struct Args {
     output_metadata: Option<PathBuf>,
     nix_prefetch: bool,
     assume_vendored: bool,
+    check: bool,
 }
 
 impl Args {
@@ -73,6 +78,7 @@ impl Args {
         let mut output_metadata: Option<PathBuf> = None;
         let mut nix_prefetch = false;
         let mut assume_vendored = false;
+        let mut check = false;
 
         let mut parser = lexopt::Parser::from_env();
         while let Some(arg) = parser.next()? {
@@ -111,6 +117,9 @@ impl Args {
                 Long("assume-vendored") if !assume_vendored => {
                     assume_vendored = true;
                 }
+                Long("check") if !check => {
+                    check = true;
+                }
                 _ => return Err(arg.unexpected()),
             }
         }
@@ -122,6 +131,7 @@ impl Args {
             output_metadata,
             nix_prefetch,
             assume_vendored,
+            check,
         })
     }
 
@@ -148,6 +158,7 @@ impl Args {
             output_metadata: self.output_metadata.as_deref(),
             nix_prefetch: self.nix_prefetch,
             assume_vendored: self.assume_vendored,
+            check: self.check,
         };
 
         time!("run", run::run(args));

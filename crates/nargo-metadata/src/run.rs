@@ -14,6 +14,7 @@ pub(crate) struct Args<'a> {
     pub output_metadata: Option<&'a Path>,
     pub nix_prefetch: bool,
     pub assume_vendored: bool,
+    pub check: bool,
 }
 
 pub fn run(args: Args<'_>) {
@@ -65,11 +66,25 @@ pub fn run(args: Args<'_>) {
         time!("prefetch", prefetch::prefetch(&mut output));
     }
 
-    let buf = time!("serialize output", output.serialize_pretty());
+    let output_bytes = time!("serialize output", output.serialize_pretty());
 
-    time!(
-        "write output",
-        fs::write_file_or_stdout(args.output_metadata, &buf)
-            .expect("Failed to write output")
-    );
+    // if  no --check, just write the output
+    // if yes --check, compare output with current Cargo.metadata.json
+    if !args.check {
+        time!(
+            "write output",
+            fs::write_file_or_stdout(args.output_metadata, &output_bytes)
+                .expect("Failed to write output")
+        );
+    } else {
+        let prev_output_bytes = match args.input_current_metadata_bytes {
+            Some(x) => x,
+            None => {
+                panic!("check: could not find existing Cargo.metadata.json")
+            }
+        };
+        if prev_output_bytes != output_bytes {
+            panic!("check: new Cargo.metadata.json doesn't match current Cargo.metadata.json");
+        }
+    }
 }
