@@ -5,7 +5,7 @@
   stdenvNoCC,
   pkgs,
   rustc,
-  build,
+  buildGraph,
   resolve,
 }:
 # NOTE(phlip9): we need to "manually" build `nargo-rustc` to bootstrap
@@ -115,7 +115,7 @@ stdenvNoCC.mkDerivation {
       hostTarget = hostTarget;
     };
 
-    built = build.build {
+    buildGraph = buildGraph.buildGraph {
       workspacePath = ../.;
       metadata = metadata;
       resolved = resolved;

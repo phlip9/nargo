@@ -8,11 +8,11 @@
 #
 # See: [`nixpkgs#lib.makeScope`]
 lib.makeScope pkgs.newScope (self: {
-  # `cargo build`, implemented in nix.
-  build = self.callPackage ./build.nix {};
-
   # compile a single crate target with `nargo-rustc`, which wraps `rustc`
   buildCrate = self.callPackage ./buildCrate.nix {};
+
+  # build graph of `buildCrate`s for a single `cargo build`-equivalent invocation.
+  buildGraph = self.callPackage ./buildGraph.nix {};
 
   # inject some external dependencies
   craneLib = craneLib;

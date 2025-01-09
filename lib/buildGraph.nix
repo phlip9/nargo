@@ -5,7 +5,7 @@
   targetCfg,
   vendorCargoDep,
 }: rec {
-  build = {
+  buildGraph = {
     # Path to cargo workspace root directory.
     workspacePath,
     # JSON-deserialized `Cargo.metadata.json`

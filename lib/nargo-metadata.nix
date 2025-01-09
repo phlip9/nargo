@@ -9,7 +9,7 @@
   generateCargoMetadata,
   lib,
   resolve,
-  build,
+  buildGraph,
   nargoVendoredCargoDeps,
   pkgs,
 }:
@@ -63,7 +63,7 @@ craneLib.buildPackage rec {
       hostTarget = "x86_64-unknown-linux-gnu";
     };
 
-    built = build.build {
+    buildGraph = buildGraph.buildGraph {
       workspacePath = ../.;
       metadata = metadata;
       resolved = resolved;
