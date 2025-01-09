@@ -40,9 +40,10 @@ OPTIONS:
       written to stdout. If left unset, we'll default to `Cargo.metadata.json`
       in the current directory.
 
-  --nix-prefetch
-      Prefetch and pin dependencies from crates.io using `nix store prefetch-file`.
-      Does not work inside the `nix build` sandbox.
+  --no-nix-prefetch
+      By default, we prefetch and pin dependencies from crates.io using
+      `nix store prefetch-file`. Set this flag to disable prefetching, as it
+      doesn't work inside the `nix build` sandbox.
 
   --assume-vendored
       Assume all external crate paths in the `--input-raw-metadata` are already
@@ -64,7 +65,7 @@ pub struct Args {
     input_manifest_path: Option<PathBuf>,
     input_current_metadata: Option<PathBuf>,
     output_metadata: Option<PathBuf>,
-    nix_prefetch: bool,
+    no_nix_prefetch: bool,
     assume_vendored: bool,
     check: bool,
 }
@@ -77,7 +78,7 @@ impl Args {
         let mut input_manifest_path: Option<PathBuf> = None;
         let mut input_current_metadata: Option<PathBuf> = None;
         let mut output_metadata: Option<PathBuf> = None;
-        let mut nix_prefetch = false;
+        let mut no_nix_prefetch = false;
         let mut assume_vendored = false;
         let mut check = false;
 
@@ -112,8 +113,8 @@ impl Args {
                 Long("output-metadata") if output_metadata.is_none() => {
                     output_metadata = Some(PathBuf::from(parser.value()?));
                 }
-                Long("nix-prefetch") if !nix_prefetch => {
-                    nix_prefetch = true;
+                Long("no-nix-prefetch") if !no_nix_prefetch => {
+                    no_nix_prefetch = true;
                 }
                 Long("assume-vendored") if !assume_vendored => {
                     assume_vendored = true;
@@ -130,7 +131,7 @@ impl Args {
             input_manifest_path,
             input_current_metadata,
             output_metadata,
-            nix_prefetch,
+            no_nix_prefetch,
             assume_vendored,
             check,
         })
@@ -162,7 +163,7 @@ impl Args {
             input_current_metadata_bytes: input_current_metadata_bytes
                 .as_deref(),
             output_metadata,
-            nix_prefetch: self.nix_prefetch,
+            nix_prefetch: !self.no_nix_prefetch,
             assume_vendored: self.assume_vendored,
             check: self.check,
         };

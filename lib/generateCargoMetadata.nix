@@ -70,6 +70,7 @@ in
     nargo-metadata \
       --input-raw-metadata "$raw/Cargo.metadata.raw.json" \
       --output-metadata "$out/Cargo.metadata.json" \
+      --no-nix-prefetch \
       --assume-vendored
 
     set +x
