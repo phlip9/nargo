@@ -37,7 +37,8 @@ OPTIONS:
 
   --output-metadata PATH
       Path to output the new `Cargo.metadata.json`. If set to "-", then this is
-      written to stdout.
+      written to stdout. If left unset, we'll default to `Cargo.metadata.json`
+      in the current directory.
 
   --nix-prefetch
       Prefetch and pin dependencies from crates.io using `nix store prefetch-file`.
@@ -151,11 +152,16 @@ impl Args {
                 .expect("Failed to read current `Cargo.metadata.json`")
         );
 
+        let output_metadata = self
+            .output_metadata
+            .as_deref()
+            .unwrap_or(Path::new("Cargo.metadata.json"));
+
         let args = run::Args {
             input_raw_metadata_bytes: input_raw_metadata_bytes.as_slice(),
             input_current_metadata_bytes: input_current_metadata_bytes
                 .as_deref(),
-            output_metadata: self.output_metadata.as_deref(),
+            output_metadata,
             nix_prefetch: self.nix_prefetch,
             assume_vendored: self.assume_vendored,
             check: self.check,

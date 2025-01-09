@@ -4,7 +4,7 @@ alias rt := rust-test
 
 # Generate `Cargo.metadata.json` file
 nargo-metadata *args:
-    cargo run -p nargo-metadata -- --output-metadata Cargo.metadata.json --nix-prefetch --verbose {{ args }}
+    cargo run -p nargo-metadata -- --nix-prefetch --verbose {{ args }}
 
 # Check that `Cargo.metadata.json` file remains unchanged
 nargo-metadata-check *args:

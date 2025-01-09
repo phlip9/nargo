@@ -11,7 +11,7 @@ use crate::{
 pub(crate) struct Args<'a> {
     pub input_raw_metadata_bytes: &'a [u8],
     pub input_current_metadata_bytes: Option<&'a [u8]>,
-    pub output_metadata: Option<&'a Path>,
+    pub output_metadata: &'a Path,
     pub nix_prefetch: bool,
     pub assume_vendored: bool,
     pub check: bool,
@@ -73,7 +73,7 @@ pub fn run(args: Args<'_>) {
     if !args.check {
         time!(
             "write output",
-            fs::write_file_or_stdout(args.output_metadata, &output_bytes)
+            fs::write_file_or_stdout(Some(args.output_metadata), &output_bytes)
                 .expect("Failed to write output")
         );
     } else {
