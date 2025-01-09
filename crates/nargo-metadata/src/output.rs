@@ -36,9 +36,17 @@ pub struct Package<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Source<'a>>,
 
+    /// Prefetch'ed crates.io crates pin the content hash of their unpacked
+    /// store directory here.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hash: Option<SriHash<'a>>,
 
+    /// If this is a workspace crate, then this is the package's relative path
+    /// inside the workspace.
+    ///
+    /// If we're building in the `nix` sandbox, this is a `crane.vendorCargoDeps`
+    /// (or similar) nix store path for non-workspace deps. We can't prefetch
+    /// inside the sandbox, so we have to passthru this store path.
     #[serde(borrow)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<Cow<'a, Path>>,
@@ -219,12 +227,19 @@ impl<'a> Package<'a> {
             },
         );
 
-        // When building the Cargo.metadata.json inside the `nix build` sandbox,
-        // we have to assume the non-workspace crates are already vendored with
-        // `crane.vendorCargoDeps` (or similar). In this case, we try to reuse
-        // the already vendored crate path.
         let is_workspace = source.is_none();
-        let path = if assume_vendored && !is_workspace {
+        let path = if is_workspace {
+            // We need to record the relative path of workspace crates inside
+            // the workspace.
+            let path = manifest
+                .relative_workspace_path(ctx.workspace_root)
+                .unwrap();
+            Some(Cow::Borrowed(Path::new(path)))
+        } else if !is_workspace && assume_vendored {
+            // When building the Cargo.metadata.json inside the `nix build` sandbox,
+            // we have to assume the non-workspace crates are already vendored with
+            // `crane.vendorCargoDeps` (or similar). In this case, we try to reuse
+            // the already vendored crate path.
             let manifest_path = Path::new(manifest.manifest_path);
             let crate_path = manifest_path
                 .parent()

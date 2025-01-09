@@ -1,6 +1,6 @@
 {
  "packages": {
-  "#assert-json-diff@2.0.2": {
+  "assert-json-diff@2.0.2": {
    "name": "assert-json-diff",
    "version": "2.0.2",
    "source": "crates.io",
@@ -8,14 +8,14 @@
    "edition": "2018",
    "features": {},
    "deps": {
-    "#serde@1.0.203": {"name":"serde","kinds":[{}]},
-    "#serde_json@1.0.120": {"name":"serde_json","kinds":[{}]}
+    "serde@1.0.203": {"name":"serde","kinds":[{}]},
+    "serde_json@1.0.120": {"name":"serde_json","kinds":[{}]}
    },
    "targets": [
     {"name":"assert_json_diff","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
    ]
   },
-  "#itoa@1.0.11": {
+  "itoa@1.0.11": {
    "name": "itoa",
    "version": "1.0.11",
    "source": "crates.io",
@@ -30,7 +30,7 @@
     {"name":"itoa","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
    ]
   },
-  "#lexopt@0.3.0": {
+  "lexopt@0.3.0": {
    "name": "lexopt",
    "version": "0.3.0",
    "source": "crates.io",
@@ -42,7 +42,73 @@
     {"name":"lexopt","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
    ]
   },
-  "#proc-macro2@1.0.86": {
+  "nargo-core": {
+   "name": "nargo-core",
+   "version": "0.1.0",
+   "path": "crates/nargo-core",
+   "edition": "2021",
+   "features": {
+    "default": [],
+    "serde": ["dep:serde"]
+   },
+   "deps": {
+    "serde@1.0.203": {"name":"serde","kinds":[{"optional":true,"features":["derive"]}]}
+   },
+   "targets": [
+    {"name":"nargo_core","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
+   ]
+  },
+  "nargo-metadata": {
+   "name": "nargo-metadata",
+   "version": "0.1.0",
+   "path": "crates/nargo-metadata",
+   "edition": "2021",
+   "features": {},
+   "deps": {
+    "lexopt@0.3.0": {"name":"lexopt","kinds":[{"default":false}]},
+    "nargo-core": {"name":"nargo-core","kinds":[{"features":["serde"]}]},
+    "semver@1.0.23": {"name":"semver","kinds":[{"features":["serde"]}]},
+    "serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
+    "serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]}
+   },
+   "targets": [
+    {"name":"nargo-metadata","kind":"bin","crate_types":["bin"],"path":"src/main.rs","edition":"2021"},
+    {"name":"nargo_metadata","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
+   ]
+  },
+  "nargo-resolve": {
+   "name": "nargo-resolve",
+   "version": "0.1.0",
+   "path": "crates/nargo-resolve",
+   "edition": "2021",
+   "features": {},
+   "deps": {
+    "assert-json-diff@2.0.2": {"name":"assert-json-diff","kinds":[{"default":false}]},
+    "lexopt@0.3.0": {"name":"lexopt","kinds":[{"default":false}]},
+    "nargo-core": {"name":"nargo-core","kinds":[{"features":["serde"]}]},
+    "serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
+    "serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]}
+   },
+   "targets": [
+    {"name":"nargo-resolve","kind":"bin","crate_types":["bin"],"path":"src/main.rs","edition":"2021"},
+    {"name":"nargo_resolve","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
+   ]
+  },
+  "nargo-rustc": {
+   "name": "nargo-rustc",
+   "version": "0.1.0",
+   "path": "crates/nargo-rustc",
+   "edition": "2021",
+   "features": {},
+   "deps": {
+    "nargo-core": {"name":"nargo-core","kinds":[{}]}
+   },
+   "targets": [
+    {"name":"nargo-rustc","kind":"bin","crate_types":["bin"],"path":"src/main.rs","edition":"2021"},
+    {"name":"nargo_rustc","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
+   ]
+  },
+  "proc-macro2@1.0.86": {
    "name": "proc-macro2",
    "version": "1.0.86",
    "source": "crates.io",
@@ -56,14 +122,14 @@
     "span-locations": []
    },
    "deps": {
-    "#unicode-ident@1.0.12": {"name":"unicode-ident","kinds":[{"default":false}]}
+    "unicode-ident@1.0.12": {"name":"unicode-ident","kinds":[{"default":false}]}
    },
    "targets": [
     {"name":"build-script-build","kind":"custom-build","crate_types":["bin"],"path":"build.rs","edition":"2021"},
     {"name":"proc_macro2","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
    ]
   },
-  "#quote@1.0.36": {
+  "quote@1.0.36": {
    "name": "quote",
    "version": "1.0.36",
    "source": "crates.io",
@@ -75,13 +141,13 @@
     "proc-macro": ["proc-macro2/proc-macro"]
    },
    "deps": {
-    "#proc-macro2@1.0.86": {"name":"proc-macro2","kinds":[{"default":false}]}
+    "proc-macro2@1.0.86": {"name":"proc-macro2","kinds":[{"default":false}]}
    },
    "targets": [
     {"name":"quote","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
    ]
   },
-  "#ryu@1.0.18": {
+  "ryu@1.0.18": {
    "name": "ryu",
    "version": "1.0.18",
    "source": "crates.io",
@@ -97,7 +163,7 @@
     {"name":"ryu","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
    ]
   },
-  "#semver@1.0.23": {
+  "semver@1.0.23": {
    "name": "semver",
    "version": "1.0.23",
    "source": "crates.io",
@@ -110,14 +176,14 @@
     "std": []
    },
    "deps": {
-    "#serde@1.0.203": {"name":"serde","kinds":[{"optional":true,"default":false}]}
+    "serde@1.0.203": {"name":"serde","kinds":[{"optional":true,"default":false}]}
    },
    "targets": [
     {"name":"build-script-build","kind":"custom-build","crate_types":["bin"],"path":"build.rs","edition":"2018"},
     {"name":"semver","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
    ]
   },
-  "#serde@1.0.203": {
+  "serde@1.0.203": {
    "name": "serde",
    "version": "1.0.203",
    "source": "crates.io",
@@ -134,14 +200,14 @@
     "unstable": []
    },
    "deps": {
-    "#serde_derive@1.0.203": {"name":"serde_derive","kinds":[{"optional":true},{"target":"cfg(any())"}]}
+    "serde_derive@1.0.203": {"name":"serde_derive","kinds":[{"optional":true},{"target":"cfg(any())"}]}
    },
    "targets": [
     {"name":"build-script-build","kind":"custom-build","crate_types":["bin"],"path":"build.rs","edition":"2018"},
     {"name":"serde","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
    ]
   },
-  "#serde_derive@1.0.203": {
+  "serde_derive@1.0.203": {
    "name": "serde_derive",
    "version": "1.0.203",
    "source": "crates.io",
@@ -153,15 +219,15 @@
     "deserialize_in_place": []
    },
    "deps": {
-    "#proc-macro2@1.0.86": {"name":"proc-macro2","kinds":[{"default":false,"features":["proc-macro"]}]},
-    "#quote@1.0.36": {"name":"quote","kinds":[{"default":false,"features":["proc-macro"]}]},
-    "#syn@2.0.68": {"name":"syn","kinds":[{"default":false,"features":["clone-impls","derive","parsing","printing","proc-macro"]}]}
+    "proc-macro2@1.0.86": {"name":"proc-macro2","kinds":[{"default":false,"features":["proc-macro"]}]},
+    "quote@1.0.36": {"name":"quote","kinds":[{"default":false,"features":["proc-macro"]}]},
+    "syn@2.0.68": {"name":"syn","kinds":[{"default":false,"features":["clone-impls","derive","parsing","printing","proc-macro"]}]}
    },
    "targets": [
     {"name":"serde_derive","kind":"lib","crate_types":["proc-macro"],"path":"src/lib.rs","edition":"2015"}
    ]
   },
-  "#serde_json@1.0.120": {
+  "serde_json@1.0.120": {
    "name": "serde_json",
    "version": "1.0.120",
    "source": "crates.io",
@@ -180,16 +246,16 @@
     "unbounded_depth": []
    },
    "deps": {
-    "#itoa@1.0.11": {"name":"itoa","kinds":[{"default":false}]},
-    "#ryu@1.0.18": {"name":"ryu","kinds":[{"default":false}]},
-    "#serde@1.0.203": {"name":"serde","kinds":[{"default":false}]}
+    "itoa@1.0.11": {"name":"itoa","kinds":[{"default":false}]},
+    "ryu@1.0.18": {"name":"ryu","kinds":[{"default":false}]},
+    "serde@1.0.203": {"name":"serde","kinds":[{"default":false}]}
    },
    "targets": [
     {"name":"build-script-build","kind":"custom-build","crate_types":["bin"],"path":"build.rs","edition":"2021"},
     {"name":"serde_json","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
    ]
   },
-  "#syn@2.0.68": {
+  "syn@2.0.68": {
    "name": "syn",
    "version": "2.0.68",
    "source": "crates.io",
@@ -211,15 +277,15 @@
     "visit-mut": []
    },
    "deps": {
-    "#proc-macro2@1.0.86": {"name":"proc-macro2","kinds":[{"default":false}]},
-    "#quote@1.0.36": {"name":"quote","kinds":[{"optional":true,"default":false}]},
-    "#unicode-ident@1.0.12": {"name":"unicode-ident","kinds":[{"default":false}]}
+    "proc-macro2@1.0.86": {"name":"proc-macro2","kinds":[{"default":false}]},
+    "quote@1.0.36": {"name":"quote","kinds":[{"optional":true,"default":false}]},
+    "unicode-ident@1.0.12": {"name":"unicode-ident","kinds":[{"default":false}]}
    },
    "targets": [
     {"name":"syn","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
    ]
   },
-  "#unicode-ident@1.0.12": {
+  "unicode-ident@1.0.12": {
    "name": "unicode-ident",
    "version": "1.0.12",
    "source": "crates.io",
@@ -231,80 +297,18 @@
    "targets": [
     {"name":"unicode_ident","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2018"}
    ]
-  },
-  "crates/nargo-core#0.1.0": {
-   "name": "nargo-core",
-   "version": "0.1.0",
-   "edition": "2021",
-   "features": {
-    "default": [],
-    "serde": ["dep:serde"]
-   },
-   "deps": {
-    "#serde@1.0.203": {"name":"serde","kinds":[{"optional":true,"features":["derive"]}]}
-   },
-   "targets": [
-    {"name":"nargo_core","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
-   ]
-  },
-  "crates/nargo-metadata#0.1.0": {
-   "name": "nargo-metadata",
-   "version": "0.1.0",
-   "edition": "2021",
-   "features": {},
-   "deps": {
-    "#lexopt@0.3.0": {"name":"lexopt","kinds":[{"default":false}]},
-    "#semver@1.0.23": {"name":"semver","kinds":[{"features":["serde"]}]},
-    "#serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
-    "#serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]},
-    "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{"features":["serde"]}]}
-   },
-   "targets": [
-    {"name":"nargo-metadata","kind":"bin","crate_types":["bin"],"path":"src/main.rs","edition":"2021"},
-    {"name":"nargo_metadata","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
-   ]
-  },
-  "crates/nargo-resolve#0.1.0": {
-   "name": "nargo-resolve",
-   "version": "0.1.0",
-   "edition": "2021",
-   "features": {},
-   "deps": {
-    "#assert-json-diff@2.0.2": {"name":"assert-json-diff","kinds":[{"default":false}]},
-    "#lexopt@0.3.0": {"name":"lexopt","kinds":[{"default":false}]},
-    "#serde@1.0.203": {"name":"serde","kinds":[{"features":["derive"]}]},
-    "#serde_json@1.0.120": {"name":"serde_json","kinds":[{"features":["raw_value"]}]},
-    "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{"features":["serde"]}]}
-   },
-   "targets": [
-    {"name":"nargo-resolve","kind":"bin","crate_types":["bin"],"path":"src/main.rs","edition":"2021"},
-    {"name":"nargo_resolve","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
-   ]
-  },
-  "crates/nargo-rustc#0.1.0": {
-   "name": "nargo-rustc",
-   "version": "0.1.0",
-   "edition": "2021",
-   "features": {},
-   "deps": {
-    "crates/nargo-core#0.1.0": {"name":"nargo-core","kinds":[{}]}
-   },
-   "targets": [
-    {"name":"nargo-rustc","kind":"bin","crate_types":["bin"],"path":"src/main.rs","edition":"2021"},
-    {"name":"nargo_rustc","kind":"lib","crate_types":["lib"],"path":"src/lib.rs","edition":"2021"}
-   ]
   }
  },
  "workspace_members": [
-  "crates/nargo-core#0.1.0",
-  "crates/nargo-metadata#0.1.0",
-  "crates/nargo-resolve#0.1.0",
-  "crates/nargo-rustc#0.1.0"
+  "nargo-core",
+  "nargo-metadata",
+  "nargo-resolve",
+  "nargo-rustc"
  ],
  "workspace_default_members": [
-  "crates/nargo-core#0.1.0",
-  "crates/nargo-metadata#0.1.0",
-  "crates/nargo-resolve#0.1.0",
-  "crates/nargo-rustc#0.1.0"
+  "nargo-core",
+  "nargo-metadata",
+  "nargo-resolve",
+  "nargo-rustc"
  ]
 }

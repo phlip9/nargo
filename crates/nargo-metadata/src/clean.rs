@@ -185,7 +185,8 @@ impl<'a> input::NodeDep<'a> {
 impl<'a> input::PkgId<'a> {
     fn clean(&mut self, ctx: Context<'a>) {
         let id = self.0;
-        self.0 = nargo::PkgId::try_from_cargo_pkg_id(id, ctx.workspace_root).0;
+        self.0 =
+            nargo::PkgId::try_from_cargo_pkg_id_spec(id, ctx.workspace_root).0;
     }
 }
 
@@ -196,7 +197,7 @@ impl<'a> input::PkgId<'a> {
 impl input::Source<'_> {
     fn clean(&mut self) {
         if self.0 == CRATES_IO_REGISTRY {
-            self.0 = "crates.io"
+            *self = Self::CRATES_IO
         }
     }
 }

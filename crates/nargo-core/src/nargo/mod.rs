@@ -13,6 +13,13 @@ use serde::{Deserialize, Serialize};
 const CRATES_IO_REGISTRY: &str =
     "registry+https://github.com/rust-lang/crates.io-index";
 
+/// A nargo-specific compact package ID. Conveniently, it is always a strict
+/// substring of a cargo `PackageIdSpec`.
+///
+/// Why this is not just a cargo `PackageIdSpec`:
+/// 1. the `Cargo.metadata.json` is more compact and easier to read and audit
+/// 2. it's easier to build specific workspace and crates.io packages from the
+///    nix nargo build graph.
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[cfg_attr(test, derive(Debug))]
@@ -52,33 +59,48 @@ pub enum CrateType {
 //
 
 impl<'a> PkgId<'a> {
-    pub fn try_from_cargo_pkg_id<'b>(
+    pub fn try_from_cargo_pkg_id_spec<'b>(
         id: &'a str,
         workspace_root: &'b str,
     ) -> Self {
-        Self::try_from_cargo_pkg_id_inner(id, workspace_root)
-            .with_context(|| id.to_owned())
+        Self::try_from_cargo_pkg_id_spec_inner(id, workspace_root)
+            .context(id)
             .expect("Failed to convert serialized cargo PackageIdSpec")
     }
 
-    fn try_from_cargo_pkg_id_inner<'b>(
+    fn try_from_cargo_pkg_id_spec_inner<'b>(
         id: &'a str,
         workspace_root: &'b str,
     ) -> Option<Self> {
+        // Workspace packages should be addressed by their package name.
+        //
         // ex: "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/age#0.10.0"
-        //  -> "age#0.10.0"
+        //  -> "age"
+        // ex: "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/crates/age#0.10.0"
+        //  -> "age"
         // ex: "path+file:///nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source#dependencies@0.0.0"
-        // -> "dependencies@0.0.0"
+        // -> "dependencies"
         if let Some(rest) = id.strip_prefix("path+file://") {
+            // TODO(phlip9): support path dep on non-workspace crate?
             let rest = rest.strip_prefix(workspace_root)?;
-            let rest = rest.trim_start_matches(['#', '/']);
-            return Some(Self(rest));
+
+            let (path, fragment) = rest.rsplit_once('#')?;
+
+            // If the last path segment DOESN'T match the package name, cargo
+            // places it in the URL fragment like "<name>@<version>".
+            if let Some((name, _version)) = fragment.split_once('@') {
+                return Some(Self(name));
+            }
+
+            // Else grab the name from last path segment
+            let (_, name) = path.rsplit_once('/').unwrap_or(("", path));
+            return Some(Self(name));
         }
 
         // ex: "registry+https://github.com/rust-lang/crates.io-index#aes-gcm@0.10.3"
-        // -> "#aes-gcm@0.10.3"
+        // -> "aes-gcm@0.10.3"
         if let Some(rest) = id.strip_prefix(CRATES_IO_REGISTRY) {
-            return Some(Self(rest));
+            return Some(Self(rest.trim_start_matches('#')));
         }
 
         // ex: (unchanged) "git+http://github.com/dtolnay/semver?branch=master#a6425e6f41ddc81c6d6dd60c68248e0f0ef046c7"
@@ -275,26 +297,23 @@ mod test {
     use super::*;
 
     #[test]
-    fn pkg_id_try_from_cargo_pkg_id() {
-        let workspace_root =
-            "/nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source";
-        let id = "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/age#0.10.0";
-        let id_clean = PkgId::try_from_cargo_pkg_id_inner(id, workspace_root);
-        assert_eq!(id_clean, Some(PkgId("age#0.10.0")));
+    fn pkg_id_try_from_cargo_pkg_id_spec() {
+        #[track_caller]
+        fn ok(expected: &str, id: &str) {
+            let workspace_root =
+                "/nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source";
+            let id_clean =
+                PkgId::try_from_cargo_pkg_id_spec_inner(id, workspace_root);
+            assert_eq!(id_clean, Some(PkgId(expected)));
+        }
 
-        let workspace_root =
-            "/nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source";
-        let id = "path+file:///nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source#dependencies@0.0.0";
-        let id_clean = PkgId::try_from_cargo_pkg_id_inner(id, workspace_root);
-        assert_eq!(id_clean, Some(PkgId("dependencies@0.0.0")));
-
-        let id = "registry+https://github.com/rust-lang/crates.io-index#aes-gcm@0.10.3";
-        let id_clean = PkgId::try_from_cargo_pkg_id_inner(id, workspace_root);
-        assert_eq!(id_clean, Some(PkgId("#aes-gcm@0.10.3")));
-
-        let id = "git+http://github.com/dtolnay/semver?branch=master#a6425e6f41ddc81c6d6dd60c68248e0f0ef046c7";
-        let id_clean = PkgId::try_from_cargo_pkg_id_inner(id, workspace_root);
-        assert_eq!(id_clean, Some(PkgId(id)));
+        ok("age", "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/age#0.10.0");
+        ok("age", "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/crates/age#0.10.0");
+        ok("dependencies", "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source#dependencies@0.0.0");
+        ok("dependencies", "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/other-path#dependencies@0.0.0");
+        ok("aes-gcm@0.10.3", "registry+https://github.com/rust-lang/crates.io-index#aes-gcm@0.10.3");
+        let id =  "git+http://github.com/dtolnay/semver?branch=master#a6425e6f41ddc81c6d6dd60c68248e0f0ef046c7";
+        ok(id, id);
     }
 
     #[test]

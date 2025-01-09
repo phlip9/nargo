@@ -27,6 +27,8 @@
     #
     # Ex: `[ "derive" "vendored-openssl" ]`
     # TODO(phlip9): --all-features
+    # TODO(phlip9): `workspace-pkg/feature-name` enables only specific workspace
+    #               package's features.
     rootFeatures ? [],
     # If true, don't enable the "default" features for the selected workspace
     # packages.

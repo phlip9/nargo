@@ -73,7 +73,7 @@ impl<'a> UnitGraph<'a> {
                     .with_context(|| unit.pkg_id.to_owned())
                     .expect("Failed to parse this cargo `PackageId`");
                 let cargo_pkg_id_spec = cargo_pkg_id.to_pkg_id_spec();
-                let nargo_pkg_id = nargo::PkgId::try_from_cargo_pkg_id(
+                let nargo_pkg_id = nargo::PkgId::try_from_cargo_pkg_id_spec(
                     &cargo_pkg_id_spec,
                     workspace_root,
                 );
@@ -431,7 +431,7 @@ mod test {
         ) {
             let cargo_pkg_id = CargoPkgId::parse(input).unwrap();
             let actual_cargo_pkg_id_spec = cargo_pkg_id.to_pkg_id_spec();
-            let actual_nargo_pkg_id = nargo::PkgId::try_from_cargo_pkg_id(
+            let actual_nargo_pkg_id = nargo::PkgId::try_from_cargo_pkg_id_spec(
                 &actual_cargo_pkg_id_spec,
                 workspace_root,
             );
@@ -446,25 +446,25 @@ mod test {
             "unicode-ident 1.0.12 (registry+https://github.com/rust-lang/crates.io-index)",
             "",
             "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.12",
-            "#unicode-ident@1.0.12",
+            "unicode-ident@1.0.12",
         );
         ok(
             "nargo-metadata 0.1.0 (path+file:///home/phlip9/dev/nargo/crates/nargo-metadata)",
             "/home/phlip9/dev/nargo",
             "path+file:///home/phlip9/dev/nargo/crates/nargo-metadata#0.1.0",
-            "crates/nargo-metadata#0.1.0",
+            "nargo-metadata",
         );
         ok(
             "dependencies 0.0.0 (path+file:///nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source)",
             "/nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source",
             "path+file:///nix/store/7ph245lhiqzngqqkgrfnd4cdrzi08p4g-source#dependencies@0.0.0",
-            "dependencies@0.0.0",
+            "dependencies",
         );
         ok(
             "semver 1.0.12 (registry+https://github.com/rust-lang/crates.io-index)",
             "",
             "registry+https://github.com/rust-lang/crates.io-index#semver@1.0.12",
-            "#semver@1.0.12",
+            "semver@1.0.12",
         );
         ok(
             "semver 1.0.0 (git+https://github.com/dtolnay/semver?tag=1.0.0#a2ce5777dcd455246e4650e36dde8e2e96fcb3fd)",

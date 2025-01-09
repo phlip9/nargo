@@ -47,20 +47,20 @@
           pkgMetadata = metadataPkgs.${pkgId};
 
           crateSrc =
+            # Internal: place each workspace package into its own store path.
+            # Isolating each package is a prerequisite for perfect builds,
+            # otherwise touching one workspace crate will cause all others to
+            # also recompile.
+            if !(pkgMetadata ? source)
+            then (_srcForWorkspacePkg workspacePath pkgMetadata.path)
             # External: if we're using `craneLib.vendorCargoDeps`, we should
             # have a `path` attr that contains the vendored crate source.
-            if (pkgMetadata ? path)
+            else if (pkgMetadata ? path)
             then pkgMetadata.path
             # External: if we're using `nargo-metadata --nix-prefetch`, we
             # should have a pinned crates.io `hash` attr.
             else if (pkgMetadata ? hash)
             then (vendorCargoDep pkgMetadata)
-            # Internal: place each workspace package into its own store path.
-            # Isolating each package is a prerequisite for perfect builds,
-            # otherwise touching one workspace crate will cause all others to
-            # also recompile.
-            else if !(pkgMetadata ? source)
-            then (_srcForWorkspacePkg workspacePath pkgId pkgMetadata)
             #
             else throw "nargo: error: unsure how to get crate source for package: ${pkgId}";
         in
@@ -224,9 +224,7 @@
   # Vendor workspace packages into their own isolated store path. We need a
   # little more granularity than just vendoring the whole package workspace path
   # so we can handle workspaces with a top-level root package.
-  _srcForWorkspacePkg = workspacePath: pkgId: pkgMetadata: let
-    # "crates/nargo-metadata#0.1.0" -> "crates/nargo-metadata"
-    pkgWorkspaceRelPath = builtins.head (builtins.split "#" pkgId);
+  _srcForWorkspacePkg = workspacePath: pkgWorkspaceRelPath: let
     pkgWorkspacePath = workspacePath + "/${pkgWorkspaceRelPath}";
 
     CargoToml = pkgWorkspacePath + "/Cargo.toml";
