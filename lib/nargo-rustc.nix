@@ -6,6 +6,7 @@
   pkgs,
   rustc,
   buildGraph,
+  buildPackage,
   resolve,
 }:
 # NOTE(phlip9): we need to "manually" build `nargo-rustc` to bootstrap
@@ -102,9 +103,10 @@ stdenvNoCC.mkDerivation {
   strictDeps = true;
 
   passthru = rec {
+    workspacePath = ../.;
     buildTarget = "x86_64-unknown-linux-gnu";
     hostTarget = "x86_64-unknown-linux-gnu";
-    rootPkgIds = ["crates/nargo-rustc#0.1.0"];
+    rootPkgIds = ["nargo-rustc"];
 
     metadata = builtins.fromJSON (builtins.readFile ../Cargo.metadata.json);
 
@@ -115,14 +117,22 @@ stdenvNoCC.mkDerivation {
       hostTarget = hostTarget;
     };
 
-    buildGraph = buildGraph.buildGraph {
-      workspacePath = ../.;
+    builtCrates = buildGraph.buildGraph {
+      workspacePath = workspacePath;
       metadata = metadata;
       resolved = resolved;
       rootPkgIds = rootPkgIds;
       buildTarget = buildTarget;
       hostTarget = hostTarget;
       pkgsCross = pkgs; # TODO(phlip9): cross-compile
+    };
+
+    built = buildPackage {
+      workspacePath = workspacePath;
+      metadata = metadata;
+      pkgsCross = pkgs;
+      packages = ["nargo-rustc"];
+      bins = ["nargo-rustc"];
     };
   };
 }

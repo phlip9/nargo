@@ -16,10 +16,11 @@
     # A list of the root package(s) we're going to build.
     #
     # The behavior mirrors `cargo`; leaving it unset will build all default
-    # workspace members. Setting it explicitly like `cargo build -p foo` will
-    # only build the `foo` package.
+    # workspace members. Setting it explicitly like `["foo" "bar"]` will only
+    # build targets from the `foo` and `bar` workspace packages. The equivalent
+    # for cargo would be `cargo build -p foo -p bar`.
     #
-    # Ex: `[ "age-plugin#0.5.0" "rage#0.10.0" ]`
+    # Ex: `[ "age-plugin" "rage" ]`
     rootPkgIds ? metadata.workspace_default_members,
     # The features to activate for all `rootPkgIds` in the workspace.
     #
@@ -78,12 +79,12 @@
     #
     # Returns a list that looks like:
     # ```
-    # [ { key = [ "crates/nargo-metadata#0.1.0" "normal" ]; }
-    #   { key = [ "#anyhow@1.0.86" "normal" "default" ]; }
-    #   { key = [ "#anyhow@1.0.86" "normal" ]; }
-    #   { key = [ "#quote@1.0.36" "build" "proc-macro2/proc-macro" ]; }
-    #   { key = [ "#syn@2.0.68" "build" "dep:quote" ]; }
-    #   { key = [ "#syn@2.0.68" "build" "proc-macro2/proc-macro" ]; } ]
+    # [ { key = [ "nargo-metadata" "normal" ]; }
+    #   { key = [ "anyhow@1.0.86" "normal" "default" ]; }
+    #   { key = [ "anyhow@1.0.86" "normal" ]; }
+    #   { key = [ "quote@1.0.36" "build" "proc-macro2/proc-macro" ]; }
+    #   { key = [ "syn@2.0.68" "build" "dep:quote" ]; }
+    #   { key = [ "syn@2.0.68" "build" "proc-macro2/proc-macro" ]; } ]
     # ```
     #
     # Note: we can't use an attrset for the `key` since they're not comparable,
@@ -107,7 +108,7 @@
     # Collect the `activationsList` into an attrset.
     #
     # {
-    #   "#syn@2.0.68" = {
+    #   "syn@2.0.68" = {
     #     build = {
     #       feats = {
     #         clone-impls = null;
@@ -217,8 +218,7 @@
     # Otherwise we need to go for another round of feature resolution.
     #
     # {
-    #   "#zerocopy@0.8.0-alpha.6" = { normal = []; };
-    #   "rand@0.9.0-alpha.1" = {
+    #   "rand" = {
     #     normal = [
     #       {
     #         depFeat = "std";
@@ -228,6 +228,7 @@
     #       }
     #     ];
     #   };
+    #   "zerocopy@0.8.0-alpha.6" = { normal = []; };
     #   # ...
     # }
     unsatDeferred =

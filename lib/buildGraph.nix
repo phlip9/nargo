@@ -5,32 +5,66 @@
   targetCfg,
   vendorCargoDep,
 }: rec {
+  #
+  # Build the graph of `buildCrate`'s for a single `cargo build`-equivalent
+  # invocation.
+  #
+  # ```
+  # {
+  #   "proc-macro2@1.0.86" = {
+  #     build = {
+  #       custom-build = buildCrate { .. };
+  #       lib = buildCrate { .. };
+  #     };
+  #   };
+  #   "itoa@1.0.11" = {
+  #     normal = {
+  #       lib = buildCrate { .. };
+  #     };
+  #   };
+  #   "nargo-metadata" = {
+  #     normal = {
+  #       bin-nargo-metadata = buildCrate { .. };
+  #       lib = buildCrate { .. };
+  #     };
+  #   };
+  # };
+  # ```
   buildGraph = {
     # Path to cargo workspace root directory.
     workspacePath,
-    # JSON-deserialized `Cargo.metadata.json`
-    metadata,
-    # The package set with all features resolved.
+    # Path to workspace `Cargo.metadata.json`.
+    metadataPath ? workspacePath + "/Cargo.metadata.json",
+    # JSON-deserialized workspace `Cargo.metadata.json`.
+    metadata ? builtins.fromJSON (builtins.readFile metadataPath),
+    #
+    buildTarget,
+    buildPlatform ? lib.systems.elaborate buildTarget,
+    hostTarget,
+    hostPlatform ? lib.systems.elaborate hostTarget,
+    # A nixpkgs instance where
+    # `pkgsBuildBuild` is for `buildPlatform` and
+    # `pkgsBuildTarget` is for `hostPlatform`
+    pkgsCross,
+    # A list of the root package(s) we're going to build.
+    #
+    # The behavior mirrors `cargo`; leaving it unset will build all default
+    # workspace members. Setting it explicitly like `["foo" "bar"]` will only
+    # build targets from the `foo` and `bar` workspace packages. The equivalent
+    # for cargo would be `cargo build -p foo -p bar`.
+    #
+    # Ex: `[ "age-plugin" "rage" ]`
+    rootPkgIds ? metadata.workspace_default_members,
+    # The package set with all features resolved, from `resolve.resolveFeatures`.
     # ```
     # {
-    #   "#anyhow@1.0.86" = {
+    #   "anyhow@1.0.86" = {
     #     build = { feats = { default = null; std = null; }; deps = {}; };
     #     normal = { ... };
     #   };
     # }
     # ```
     resolved,
-    #
-    buildTarget,
-    buildPlatform ? lib.systems.elaborate buildTarget,
-    hostTarget,
-    hostPlatform ? lib.systems.elaborate hostTarget,
-    # TODO(phlip9): target selection
-    rootPkgIds ? metadata.workspace_default_members,
-    # A nixpkgs instance where
-    # `pkgsBuildBuild` is for `buildPlatform` and
-    # `pkgsBuildTarget` is for `hostPlatform`
-    pkgsCross,
   }: let
     metadataPkgs = metadata.packages;
 

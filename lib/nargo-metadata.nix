@@ -10,6 +10,7 @@
   lib,
   resolve,
   buildGraph,
+  buildPackage,
   nargoVendoredCargoDeps,
   pkgs,
 }:
@@ -41,12 +42,17 @@ craneLib.buildPackage rec {
   strictDeps = true;
 
   passthru = rec {
+    workspacePath = ../.;
+    buildTarget = "x86_64-unknown-linux-gnu";
+    hostTarget = "x86_64-unknown-linux-gnu";
+    rootPkgIds = ["nargo-metadata"];
+
     build-plan = generateCargoBuildPlan {
       name = pname;
       src = src;
       cargoVendorDir = nargoVendoredCargoDeps;
       cargoExtraArgs = cargoExtraArgs;
-      hostTarget = "x86_64-unknown-linux-gnu";
+      hostTarget = hostTarget;
     };
 
     metadataDrv = generateCargoMetadata {
@@ -59,18 +65,28 @@ craneLib.buildPackage rec {
 
     resolved = resolve.resolveFeatures {
       metadata = metadata;
-      buildTarget = "x86_64-unknown-linux-gnu";
-      hostTarget = "x86_64-unknown-linux-gnu";
+      buildTarget = buildTarget;
+      hostTarget = hostTarget;
+      rootPkgIds = rootPkgIds;
     };
 
-    buildGraph = buildGraph.buildGraph {
+    builtCrates = buildGraph.buildGraph {
       workspacePath = ../.;
       metadata = metadata;
       resolved = resolved;
-      buildTarget = "x86_64-unknown-linux-gnu";
-      hostTarget = "x86_64-unknown-linux-gnu";
+      rootPkgIds = rootPkgIds;
+      buildTarget = buildTarget;
+      hostTarget = hostTarget;
       # TODO(phlip9): only works on ^^^
       pkgsCross = pkgs;
+    };
+
+    built = buildPackage {
+      workspacePath = workspacePath;
+      metadata = metadata;
+      pkgsCross = pkgs;
+      packages = ["nargo-metadata"];
+      bins = ["nargo-metadata"];
     };
   };
 

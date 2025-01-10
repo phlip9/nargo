@@ -11,8 +11,12 @@ lib.makeScope pkgs.newScope (self: {
   # compile a single crate target with `nargo-rustc`, which wraps `rustc`
   buildCrate = self.callPackage ./buildCrate.nix {};
 
-  # build graph of `buildCrate`s for a single `cargo build`-equivalent invocation.
+  # build the graph of `buildCrate`s for a single `cargo build`-equivalent
+  # invocation.
   buildGraph = self.callPackage ./buildGraph.nix {};
+
+  # the high-level interface to build rust packages.
+  buildPackage = self.callPackage ./buildPackage.nix {};
 
   # inject some external dependencies
   craneLib = craneLib;
