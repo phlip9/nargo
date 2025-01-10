@@ -205,6 +205,9 @@ impl<'a> BuildContext<'a> {
         };
 
         let target_path = self.src.join(self.target.path);
+
+        // build the build.rs script with the build profile/target triple, but
+        // run the script with normal profile/target triple
         let profile = if self.target.is_custom_build() {
             self.host_profile.as_ref().unwrap()
         } else {
@@ -222,11 +225,34 @@ impl<'a> BuildContext<'a> {
             .args(["--crate-type", self.target.crate_types_str])
             .args(["--edition", self.target.edition])
             .args([OsStr::new("--remap-path-prefix"), &remap])
-            .args([OsStr::new("--out-dir"), self.out.as_os_str()])
             .args(["--target", target_triple])
             .arg("--error-format=human")
             .arg("--diagnostic-width=80")
             .arg("--cap-lints=allow");
+
+        //              bins: `-o $out/bin/${target.name}`
+        // libs/custom-build: `--out-dir $out`
+        //
+        // TODO(phlip9): should probably put linkable libs into `lib` dir
+        match self.target.kind {
+            TargetKind::Bin
+            | TargetKind::Test
+            | TargetKind::Bench
+            | TargetKind::ExampleBin => {
+                let mut out_dir = self.out.join("bin");
+                fs::create_dir(&out_dir).expect("mkdir");
+
+                out_dir.push(self.target.name);
+                let out_file = out_dir;
+
+                cmd.args([OsStr::new("-o"), out_file.as_os_str()]);
+            }
+            TargetKind::Lib
+            | TargetKind::ExampleLib
+            | TargetKind::CustomBuild => {
+                cmd.args([OsStr::new("--out-dir"), self.out.as_os_str()]);
+            }
+        };
 
         // TODO(phlip9): if `edition` is unstable for this compiler release,
         // add `-Zunstable-options`

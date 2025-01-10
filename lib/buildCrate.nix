@@ -43,9 +43,7 @@ pkgs.stdenv.mkDerivation {
     TARGET_TRIPLE = "x86_64-unknown-linux-gnu";
   };
 
-  buildPhase = ''
-    nargo-rustc
-  '';
+  buildPhase = "nargo-rustc";
 
   passthru = {
     metadata = pkgMetadata;
