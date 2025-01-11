@@ -1,4 +1,4 @@
-# cargo build --bin nargo-resolve
+# cargo build -p nargo-rustc --bin nargo-rustc
 {
   lib,
   stdenv,
