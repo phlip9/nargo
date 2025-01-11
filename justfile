@@ -11,12 +11,12 @@ nargo-metadata-check *args:
     just nargo-metadata --check {{ args }}
 
 smoketest-pkg pkg:
-    nix build -L --show-trace \
-        .#tests.x86_64-linux.examples."{{ pkg }}".checkResolveFeatures
+    nix build -f . -L --show-trace \
+        tests.x86_64-linux.examples."{{ pkg }}".checkResolveFeatures
 
 smoketest-pkg-dbg pkg:
-    nix build -L --show-trace --debugger --impure --ignore-try \
-        .#tests.x86_64-linux.examples."{{ pkg }}".checkResolveFeatures
+    nix build -f . -L --show-trace --debugger --impure --ignore-try \
+        tests.x86_64-linux.examples."{{ pkg }}".checkResolveFeatures
 
 # Run nargo-resolve test on local workspace
 nargo-resolve-workspace:
@@ -27,7 +27,7 @@ nargo-resolve-workspace:
         --workspace-root $(pwd)
 
 resolve-features:
-    nix eval --json .#packages.x86_64-linux.nargo-metadata.resolved
+    nix eval -f . --json packages.x86_64-linux.nargo-metadata.resolved
 
 # Emit `cargo build --unit-graph` for local workspace
 cargo-unit-graph:
@@ -45,7 +45,7 @@ cargo-build-plan:
         -Z unstable-options
 
 cargo-metadata pkg:
-    nix build .#tests.x86_64-linux.examples."{{ pkg }}".metadata
+    nix build -f . tests.x86_64-linux.examples."{{ pkg }}".metadata
     cat ./result \
         | jq -S . \
         | tee /dev/stderr \
@@ -122,10 +122,10 @@ nix-test *args:
 
 # build top-level packages in GitHub Actions CI
 nix-build-gha-ci:
-    nix build -L --no-link \
-        .#nargo-rustc \
-        .#nargo-metadata \
-        '.#nargo-metadata.built."crates/nargo-metadata#0.1.0".normal.bin-nargo-metadata'
+    nix build -f . -L --no-link \
+        packages.currentSystem.nargo-rustc \
+        packages.currentSystem.nargo-metadata \
+        packages.currentSystem.nargo-resolve
 
 # --- bash --- #
 
@@ -133,17 +133,17 @@ shfmt-config := "--indent 2 --simplify --space-redirects --language-dialect bash
 shellcheck-config := "--shell=bash"
 
 bash-fmt:
-    nix develop .#bash-lint --command \
+    nix develop -f . devShells.currentSystem.bash-lint --command \
       fd --extension "sh" --exec-batch \
         shfmt {{ shfmt-config }} --list --write
 
 bash-fmt-check:
-    nix develop .#bash-lint --command \
+    nix develop -f . devShells.currentSystem.bash-lint --command \
       fd --extension "sh" --exec-batch \
         shfmt {{ shfmt-config }} --diff
 
 bash-lint:
-    nix develop .#bash-lint --command \
+    nix develop -f . devShells.currentSystem.bash-lint --command \
       fd --extension "sh" --exec-batch \
         shellcheck {{ shellcheck-config }}
 

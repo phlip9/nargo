@@ -1,8 +1,5 @@
 # This derivation builds the `nargo-metadata` binary, which we use to generate
 # the `Cargo.metadata.json` file in a cargo workspace.
-#
-# Currently this uses the nixpkgs `rustPlatform.buildRustPackage` builder, but
-# we'll want to switch over to our own builder when that exists.
 {
   craneLib,
   generateCargoBuildPlan,
@@ -85,6 +82,8 @@ craneLib.buildPackage rec {
       workspacePath = workspacePath;
       metadata = metadata;
       pkgsCross = pkgs;
+      # pname = pname;
+      # version = version;
       packages = ["nargo-metadata"];
       bins = ["nargo-metadata"];
     };

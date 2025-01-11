@@ -1,44 +1,62 @@
 {
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    crane.url = "github:ipetkov/crane";
-  };
+  # For external usage, nargo's only dependency is the `nixpkgs` instance users
+  # pass in to `nargo.lib.mkLib`. Since nix flakes don't have a notion of
+  # dev-dependencies, we'll manually manage dev- and test-only deps in
+  # `./tests/flake/flake.nix`.
+  inputs = {};
 
-  outputs = {self, ...} @ inputs: let
-    lib = inputs.nixpkgs.lib;
-
+  outputs = {self}: let
     systems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin"];
-    eachSystem = builder: lib.genAttrs systems builder;
+    genAttrs = names: builder:
+      builtins.listToAttrs (builtins.map (name: {
+          name = name;
+          value = builder name;
+        })
+        names);
+    eachSystem = builder: genAttrs systems builder;
 
-    systemPkgs = eachSystem (system: inputs.nixpkgs.legacyPackages.${system});
+    # Manually fetch our dev- and test-only flake `inputs`.
+    inputsDev = import ./tests/flake;
+
+    systemPkgs = eachSystem (system: inputsDev.nixpkgs.legacyPackages.${system});
     eachSystemPkgs = builder: eachSystem (system: builder systemPkgs.${system});
 
-    systemCraneLib = eachSystemPkgs (pkgs: inputs.crane.mkLib pkgs);
+    systemCraneLib = eachSystemPkgs (pkgs: inputsDev.crane.mkLib pkgs);
     systemNargoLib = eachSystemPkgs (pkgs: self.lib.mkLib pkgs);
   in {
+    #
+    # Public
+    #
+    # Example usage:
+    #
+    # ```nix
+    # pkgs = import inputs.nixpkgs { system = "x86_64-linux"; };
+    # nargoLib = nargo.lib.mkLib pkgs;
+    # myCrate = nargoLib.buildPackage { .. };
+    # ```
     lib = {
       mkLib = pkgs:
         import ./lib {
-          lib = inputs.nixpkgs.lib;
+          lib = pkgs.lib;
           pkgs = pkgs;
+          # TODO(phlip9): remove
           craneLib = systemCraneLib.${pkgs.system};
         };
-
-      nargo = systemNargoLib;
     };
 
+    #
+    # Private
+    #
+
     packages = eachSystem (system: let
-      tests = self.tests.${system};
       nargoLib = systemNargoLib.${system};
     in {
       # smuggle this in via `packages` to get garnix to build it
-      garnix-all-checks = tests.garnix-all-checks;
+      garnix-all-checks = self.tests.${system}.garnix-all-checks;
 
       nargo-metadata = nargoLib.nargo-metadata;
       nargo-resolve = nargoLib.nargo-resolve;
       nargo-rustc = nargoLib.nargo-rustc;
-
-      nixprof = nargoLib.nixprof;
     });
 
     devShells = eachSystem (
@@ -61,9 +79,9 @@
 
     tests = eachSystem (system:
       import ./tests {
-        lib = inputs.nixpkgs.lib;
+        lib = inputsDev.nixpkgs.lib;
         craneLib = systemCraneLib.${system};
-        inputs = inputs;
+        inputs = inputsDev;
         nargoLib = systemNargoLib.${system};
         pkgs = systemPkgs.${system};
       });
@@ -75,6 +93,8 @@
     _dbg = {
       systemPkgs = systemPkgs;
       systemNargoLib = systemNargoLib;
+
+      inputsDev = inputsDev;
     };
   };
 }

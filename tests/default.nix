@@ -11,6 +11,12 @@
 
   targetCfg = import ./targetCfg.nix {inherit lib nargoLib;};
 
+  packages = {
+    nargo-metadata = nargoLib.nargo-metadata;
+    nargo-resolve = nargoLib.nargo-resolve;
+    nargo-rustc = nargoLib.nargo-rustc;
+  };
+
   checks = builtins.listToAttrs (lib.flatten (_flattenTests "tests" {
     targetCfg = targetCfg;
     examples = builtins.mapAttrs (_: value:
@@ -20,6 +26,7 @@
       }
       value)
     examples;
+    packages = packages;
   }));
 
   # circumvent garnix's max 100-top-level-packages limit by making a giant
