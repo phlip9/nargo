@@ -71,6 +71,10 @@
     buildCfgs = targetCfg.platformToCfgs buildPlatform;
     hostCfgs = targetCfg.platformToCfgs hostPlatform;
 
+    # TODO(phlip9): should be an arg?
+    # TODO(phlip9): choose right package set by build/hostTarget?
+    rustc = pkgsCross.rustc.unwrapped;
+
     # TODO(phlip9): discover target cfgs with `rustc --print=cfg`. Do we also
     # need some fancy fixpoint iteration a la
     # `cargo::core::compiler::build_context::target_info::TargetInfo::new`?
@@ -120,7 +124,6 @@
                       else "${kind}-${target.name}";
 
                     maybePkgUnitsCustomBuild = pkgUnits.custom-build or null;
-                    # "${pkgId} > ${featFor} > custom-build"
 
                     # the build-script unit (or null), but only if we're not the
                     # build-script itself. we separate this case from the other
@@ -140,7 +143,6 @@
                         (pkgUnits ? lib)
                         # only if lib has a "linkable" output
                         && (builtins.any (t: t == "lib" || t == "proc-macro" || t == "dylib" || t == "rlib") pkgLibTarget.crate_types)
-                      # then ["${pkgId} > ${featFor} > lib"]
                       then [(_mkTargetDep pkgLibTarget.crate_name pkgLibUnit pkgLibTarget)]
                       else [];
 
@@ -168,12 +170,12 @@
                     };
                   in {
                     name = unitName;
-                    # value = {target = buildTarget;};
                     value = buildCrate {
-                      # TODO(phlip9): choose right package set by build/hostTarget?
-                      pkgs = pkgsCross;
-                      pkgMetadata = pkgMetadata;
+                      buildPlatform = buildPlatform;
                       crateSrc = crateSrc;
+                      hostPlatform = hostPlatform;
+                      pkgMetadata = pkgMetadata;
+                      rustc = rustc;
                       target = buildTarget;
                     };
                   })
@@ -235,7 +237,6 @@
         if relevantPkgDepKinds != []
         # TODO(phlip9): build scripts: for each dep that has a `links` key, also
         # depend on dep's build script
-        # then ["${depPkgId} > ${depFeatFor} > lib"]
         then [(_mkTargetDep pkgDepName depUnit depUnit.target)]
         else []
     )
