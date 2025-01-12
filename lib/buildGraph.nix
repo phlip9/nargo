@@ -258,6 +258,9 @@
   # Vendor workspace packages into their own isolated store path. We need a
   # little more granularity than just vendoring the whole package workspace path
   # so we can handle workspaces with a top-level root package.
+  #
+  # NOTE: filtering only works with local paths. this does no filtering nothing
+  # on e.g. a src from a derivation.
   _srcForWorkspacePkg = workspacePath: pkgWorkspaceRelPath: let
     pkgWorkspacePath = workspacePath + "/${pkgWorkspaceRelPath}";
 
@@ -267,14 +270,18 @@
     examples = pkgWorkspacePath + "/examples";
     tests = pkgWorkspacePath + "/tests";
   in
-    lib.fileset.toSource {
-      root = pkgWorkspacePath;
-      fileset = lib.fileset.unions [
-        CargoToml
-        src
-        (lib.fileset.maybeMissing benches)
-        (lib.fileset.maybeMissing examples)
-        (lib.fileset.maybeMissing tests)
-      ];
-    };
+    # TODO(phlip9): filtering on derivation src?
+    if builtins.isPath workspacePath
+    then
+      lib.fileset.toSource {
+        root = pkgWorkspacePath;
+        fileset = lib.fileset.unions [
+          CargoToml
+          src
+          (lib.fileset.maybeMissing benches)
+          (lib.fileset.maybeMissing examples)
+          (lib.fileset.maybeMissing tests)
+        ];
+      }
+    else pkgWorkspacePath;
 }
