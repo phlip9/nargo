@@ -16,17 +16,18 @@
     eachSystem = builder: genAttrs systems builder;
 
     # Manually fetch our dev- and test-only flake `inputs`.
-    inputsDev = import ./tests/flake;
+    inputsTest = import ./tests/flake;
 
-    systemPkgs = eachSystem (system: inputsDev.nixpkgs.legacyPackages.${system});
+    systemPkgs = eachSystem (system: inputsTest.nixpkgs.legacyPackages.${system});
     eachSystemPkgs = builder: eachSystem (system: builder systemPkgs.${system});
 
-    systemCraneLib = eachSystemPkgs (pkgs: inputsDev.crane.mkLib pkgs);
     systemNargoLib = eachSystemPkgs (pkgs: self.lib.mkLib pkgs);
+    systemNargoTestLib = eachSystem (system: self.tests.${system}.nargoTestLib);
   in {
     #
     # Public
     #
+
     # Example usage:
     #
     # ```nix
@@ -39,8 +40,6 @@
         import ./lib {
           lib = pkgs.lib;
           pkgs = pkgs;
-          # TODO(phlip9): remove
-          craneLib = systemCraneLib.${pkgs.system};
         };
     };
 
@@ -61,9 +60,9 @@
 
     devShells = eachSystem (
       system: let
-        nargoLib = systemNargoLib.${system};
+        mkMinShell = nargoTestLib.mkMinShell;
+        nargoTestLib = systemNargoTestLib.${system};
         pkgs = systemPkgs.${system};
-        mkMinShell = nargoLib.mkMinShell;
       in {
         bash-lint = mkMinShell {
           name = "bash-lint";
@@ -79,9 +78,8 @@
 
     tests = eachSystem (system:
       import ./tests {
-        lib = inputsDev.nixpkgs.lib;
-        craneLib = systemCraneLib.${system};
-        inputs = inputsDev;
+        lib = inputsTest.nixpkgs.lib;
+        inputsTest = inputsTest;
         nargoLib = systemNargoLib.${system};
         pkgs = systemPkgs.${system};
       });
@@ -91,10 +89,10 @@
     formatter = eachSystemPkgs (pkgs: pkgs.alejandra);
 
     _dbg = {
-      systemPkgs = systemPkgs;
+      inputsDev = inputsTest;
       systemNargoLib = systemNargoLib;
-
-      inputsDev = inputsDev;
+      systemNargoTestLib = systemNargoTestLib;
+      systemPkgs = systemPkgs;
     };
   };
 }

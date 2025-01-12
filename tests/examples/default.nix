@@ -1,7 +1,8 @@
 {
   craneLib,
-  inputs,
+  inputsTest,
   nargoLib,
+  nargoTestLib,
   pkgs,
 }: let
   # imports
@@ -15,7 +16,7 @@
     src = srcCleaned;
     cargoVendorDir = craneLib.vendorCargoDeps {src = srcCleaned;};
 
-    metadataDrv = nargoLib.generateCargoMetadata {
+    metadataDrv = nargoTestLib.generateCargoMetadata {
       inherit cargoVendorDir name;
       src = srcCleaned;
     };
@@ -131,7 +132,7 @@
   mkCraneExample = path:
     mkExample {
       name = baseNameOf path;
-      src = inputs.crane + "/${path}";
+      src = inputsTest.crane + "/${path}";
     };
 in {
   #

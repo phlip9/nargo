@@ -1,11 +1,15 @@
 {
-  craneLib,
-  inputs,
+  inputsTest,
+  lib,
   nargoLib,
   pkgs,
-  lib,
 }: rec {
-  examples = import ./examples {inherit craneLib inputs nargoLib pkgs;};
+  craneLib = inputsTest.crane.mkLib pkgs;
+
+  # An extension on `nargoLib` with dev-/test-only entries.
+  nargoTestLib = import ./lib {inherit craneLib lib pkgs nargoLib;};
+
+  examples = import ./examples {inherit craneLib inputsTest nargoLib nargoTestLib pkgs;};
 
   resolve = import ./resolve.nix {inherit nargoLib;};
 
