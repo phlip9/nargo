@@ -146,6 +146,22 @@ impl TargetKind {
             Self::CustomBuild => "custom-build",
         }
     }
+
+    /// A compact, single `char` repr for a `TargetKind`.
+    ///
+    /// Process `comm` only has 15 B limit, so we encode `TargetKind` as a
+    /// single character for this case.
+    pub fn to_debug_char(&self) -> char {
+        match self {
+            Self::Lib => 'l',
+            Self::Bin => 'b',
+            Self::Test => 't',
+            Self::Bench => 'h',
+            Self::ExampleBin => 'x',
+            Self::ExampleLib => 'e',
+            Self::CustomBuild => 'c',
+        }
+    }
 }
 
 impl FromStr for TargetKind {

@@ -144,6 +144,9 @@ impl<'a> Args<'a> {
     pub fn run(self) {
         logger::set_level(self.log);
 
+        // Show package name and target kind in perf traces.
+        set_process_perf_label(&self);
+
         trace!("args: {self:#?}");
 
         run::BuildContext::from_args(self).run()
@@ -200,5 +203,21 @@ fn parse_deps<'a>(
             (None, None, None) => break deps,
             _ => panic!("DEP_NAMES, DEP_CRATE_NAMES, and DEP_PATHS are uneven"),
         };
+    }
+}
+
+/// (Linux) Improve perf trace readability by setting the process `comm` value
+/// to include the package name and target kind.
+fn set_process_perf_label(args: &Args<'_>) {
+    #[cfg(target_os = "linux")]
+    {
+        // /proc/self/comm truncates after 15 B, so we have to be a bit creative
+        use std::str::FromStr;
+        let kind = nargo_core::nargo::TargetKind::from_str(args.kind)
+            .expect("Invalid target kind")
+            .to_debug_char();
+        let package = args.pkg_name;
+        let comm = format!("nr {kind} {package}");
+        std::fs::write("/proc/self/comm", comm.as_bytes()).unwrap();
     }
 }
