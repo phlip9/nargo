@@ -102,6 +102,10 @@ stdenvNoCC.mkDerivation {
   doCheck = false;
   strictDeps = true;
 
+  # Reduce build time wasted looking for substitutions that don't exist.
+  # TODO(phlip9): make this configurable/overridable?
+  allowSubstitutes = false;
+
   passthru = rec {
     workspacePath = ../.;
     buildTarget = "x86_64-unknown-linux-gnu";

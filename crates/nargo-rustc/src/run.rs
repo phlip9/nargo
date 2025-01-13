@@ -136,7 +136,7 @@ impl<'a> BuildContext<'a> {
             split_debuginfo: None,
             overflow_checks: true,
             rpath: false,
-            panic: "unwind",
+            panic: "abort",
             strip: "debuginfo",
         });
         let host_target_triple =
