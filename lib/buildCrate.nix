@@ -1,7 +1,6 @@
 {
   lib,
   nargo-rustc,
-  gcc,
 }:
 #
 {
@@ -10,6 +9,7 @@
   hostPlatform,
   pkgMetadata,
   rustc,
+  cc,
   target,
 }:
 #
@@ -44,13 +44,10 @@ true
   LOG = "trace";
   # TODO(phlip9): need to place `rustc` in depsBuildBuild vs depsBuildHost (?)
   # depending on target/kind/etc.
-  # TODO(phlip9): remove `gcc` when everything gets provided by rustup toolchains
-  PATH = "${rustc}/bin:${gcc}/bin";
+  # TODO(phlip9): remove `cc` when everything gets provided by rustup toolchains?
+  PATH = "${rustc}/bin:${cc}/bin";
   PKG_NAME = pkgMetadata.name;
   TARGET_NAME = target.name;
   TARGET_PATH = target.path;
   TARGET_TRIPLE = hostPlatform.rust.rustcTarget;
-
-  # # uncomment/incrememt to quickly rebuild full crate graph
-  # FORCE_CACHE_MISS = 2;
 })

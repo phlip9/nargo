@@ -74,6 +74,7 @@
     # TODO(phlip9): should be an arg?
     # TODO(phlip9): choose right package set by build/hostTarget?
     rustc = pkgsCross.rustc.unwrapped;
+    cc = pkgsCross.stdenv.cc;
 
     # TODO(phlip9): discover target cfgs with `rustc --print=cfg`. Do we also
     # need some fancy fixpoint iteration a la
@@ -172,6 +173,7 @@
                     name = unitName;
                     value = buildCrate {
                       buildPlatform = buildPlatform;
+                      cc = cc;
                       crateSrc = crateSrc;
                       hostPlatform = hostPlatform;
                       pkgMetadata = pkgMetadata;
