@@ -50,4 +50,14 @@ true
   TARGET_NAME = target.name;
   TARGET_PATH = target.path;
   TARGET_TRIPLE = hostPlatform.rust.rustcTarget;
+
+  # Reduce build time wasted looking for substitutions that don't exist.
+  # TODO(phlip9): make this configurable/overridable?
+  #
+  # > If this attribute is set to `false`, then Nix will always build this
+  # > derivation (locally or remotely); it will not try to substitute its outputs.
+  # > This is useful for derivations that are cheaper to build than to substitute.
+  # >
+  # > This can be ignored by setting `always-allow-substitutes` to `true`.
+  allowSubstitutes = false;
 })
