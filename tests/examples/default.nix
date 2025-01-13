@@ -20,22 +20,27 @@
       inherit cargoVendorDir name;
       src = srcCleaned;
     };
-    metadata = builtins.fromJSON (
-      # TODO(phlip9): unhack
-      # To reduce maintainence burden for all these example crates, I wanted to
-      # reuse the zero-config `craneLib.vendorCargoDeps` and so added the
-      # `--assume-vendored` flag. We effectively passthru each crate's store
-      # path into the Cargo.metadata.json; but when we IFD it here, nix complains
-      # that `fromJSON` is not allowed to refer to a store path.
+    metadataNoCtx = builtins.fromJSON (
+      # To reduce the maintainence burden for all these example crates, I want to
+      # reuse the zero-config `craneLib.vendorCargoDeps`.
+      #
+      # `nargo-metadata --assume-vendored` then passthrus each crate src's store
+      # path into the `Cargo.metadata.json`. However, when we IFD it here, nix
+      # complains that `fromJSON` is not allowed to refer to a store path.
       builtins.unsafeDiscardStringContext (
         builtins.readFile (metadataDrv + "/Cargo.metadata.json")
       )
     );
+    # Since we removed the `metadataDrv` dependency from `metadataNoCtx` above,
+    # we need to manually fixup each vendored package's `path` string-context so
+    # that nix actually provides the `path` in `buildCrate` (or whatever
+    # dependent derivation).
+    metadata = fixupMetadataIFDPathContext metadataNoCtx metadataDrv;
 
     buildTarget = pkgs.buildPlatform.rust.rustcTarget;
     hostTarget = "x86_64-unknown-linux-gnu";
 
-    resolveFeatures = nargoLib.resolve.resolveFeatures {
+    resolved = nargoLib.resolve.resolveFeatures {
       inherit metadata buildTarget hostTarget;
     };
 
@@ -85,7 +90,7 @@
 
         # Write the resolved features into a separate derivation so I can easily
         # copy-paste the `nargo-resolve` invocation when debugging.
-        resolveFeaturesJsonPath = builtins.toFile "${name}-resolve.json" (builtins.toJSON resolveFeatures);
+        resolveFeaturesJsonPath = builtins.toFile "${name}-resolve.json" (builtins.toJSON resolved);
       } ''
         mkdir "$out"
 
@@ -101,6 +106,25 @@
           set +x;
         )
       '';
+
+    # Build with `nargoLib.buildPackage`
+    build = nargoLib.buildPackage {
+      pname = name;
+      version = "0.0.0";
+      workspacePath = srcCleaned;
+      metadata = metadata;
+      pkgsCross = pkgs;
+    };
+
+    # `nargoLib.buildGraph`
+    buildGraph = nargoLib.buildGraph.buildGraph {
+      workspacePath = srcCleaned;
+      metadata = metadata;
+      pkgsCross = pkgs;
+      buildTarget = buildTarget;
+      hostTarget = hostTarget;
+      resolved = resolved;
+    };
   };
 
   mkLocalExample = src:
@@ -133,6 +157,37 @@
     mkExample {
       name = baseNameOf path;
       src = inputsTest.crane + "/${path}";
+    };
+
+  # For a `Cargo.metadata.json` read from a derivation output (IFD), we need to
+  # manually fixup the nix string-context for each vendored package `path`.
+  #
+  # Without this fixup nix won't actually make the `path` visible to the
+  # `buildCrate` builder, as without the context it just considers the `path`
+  # a plain string and not a derivation input.
+  fixupMetadataIFDPathContext = metadata: metadataDrv: let
+    metadataDrvCtx = builtins.getContext metadataDrv.outPath;
+
+    fixupPkg = _name: pkg:
+      if ! (pkg ? source && pkg ? path)
+      then pkg
+      else (pkg // {path = fixupPath pkg.path;});
+
+    isImpureEval = builtins ? currentSystem;
+    fixupPath =
+      if isImpureEval
+      # We can depend on the package src specifically here with `storePath`, but
+      # it only works in nix-build/--impure eval mode.
+      then builtins.storePath
+      # In pure flakes eval we'll just have to add _all_ vendored cargo deps as
+      # an input.
+      # TODO(phlip9): when we have greater control over `vendorCargoDeps` we can
+      # reference the specific package src derivation here.
+      else (path: builtins.appendContext path metadataDrvCtx);
+  in
+    metadata
+    // {
+      packages = builtins.mapAttrs fixupPkg metadata.packages;
     };
 in {
   #
