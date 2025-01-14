@@ -24,8 +24,13 @@ pub fn set_level(level: Level) {
 }
 
 #[inline(always)]
-pub(crate) fn max_level() -> u8 {
+pub fn max_level() -> u8 {
     LOG_LEVEL.load(Ordering::Relaxed)
+}
+
+#[inline(always)]
+pub fn trace_enabled() -> bool {
+    (Level::Trace as u8) <= max_level()
 }
 
 // NOTE: using a thread-local buffer with infrequent flushing means log lines

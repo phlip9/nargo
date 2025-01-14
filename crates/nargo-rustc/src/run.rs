@@ -6,13 +6,14 @@ use std::{
     collections::BTreeMap,
     ffi::{OsStr, OsString},
     fs::File,
+    io::Write,
     path::{self, Path, PathBuf},
     process::Command,
     str::FromStr,
 };
 
 use nargo_core::{
-    fs,
+    fs, logger,
     nargo::{CrateType, TargetKind},
     time, trace,
 };
@@ -461,6 +462,7 @@ impl<'a> BuildContext<'a> {
         cmd.envs_cargo_pkg(self);
 
         trace!("{}", cmd.to_string_debug());
+        logger::flush();
 
         let status =
             time!("run rustc", cmd.status()).expect("failed to run `rustc`");
@@ -471,7 +473,13 @@ impl<'a> BuildContext<'a> {
     }
 
     fn run_build_script(&self) {
-        // run: $out/build_script_build 1>$out/output 2>$out/stderr
+        // run:
+        // ```
+        // OUT_DIR=$out/out \
+        // $out/build_script_build \
+        //   1>$out/output \
+        //   2>$out/stderr
+        // ```
         //
         // TODO(phlip9): faithfully impl <src/cargo/core/compiler/custom_build.rs>
 
@@ -483,13 +491,14 @@ impl<'a> BuildContext<'a> {
             RustcTargetCfg::collect(self.target_triple)
         );
 
+        let build_script_stdout = self.out.join("output");
+        let build_script_stderr = self.out.join("stderr");
+
         let mut cmd =
             Command::new(self.out.join(self.target.crate_name.as_ref()));
         cmd.current_dir(self.src)
-            .stdout(File::create(self.out.join("output")).expect("$out/output"))
-            .stderr(
-                File::create(self.out.join("stderr")).expect("$out/stderr"),
-            );
+            .stdout(File::create(&build_script_stdout).expect("$out/output"))
+            .stderr(File::create(&build_script_stderr).expect("$out/stderr"));
 
         let out_dir = self.out.join("out");
         fs::create_dir(&out_dir).expect("create_dir");
@@ -543,6 +552,18 @@ impl<'a> BuildContext<'a> {
 
         let status = time!("run build_script_build", cmd.status())
             .expect("failed to run `$out/build_script_build`");
+
+        // dump $out/stdout and $out/stderr to our stderr if error or trace mode
+        if !status.success() || logger::trace_enabled() {
+            trace!("$out/build_script_build:\nstdout:\n```");
+            logger::flush();
+            dump_file_to_stderr(&build_script_stdout);
+            trace!("\n```\nstderr:\n```");
+            logger::flush();
+            dump_file_to_stderr(&build_script_stderr);
+            trace!("```");
+        }
+
         if !status.success() {
             let code = status.code().unwrap_or(1);
             panic!("`$out/build_script_build` exited with non-zero exit code: {code}");
@@ -886,4 +907,16 @@ impl<K: Ord, V> BTreeMapExt<K, V> for BTreeMap<K, V> {
             }
         }
     }
+}
+
+//
+// --- misc ---
+//
+
+fn dump_file_to_stderr(path: &Path) {
+    let maybe_bytes = fs::read_file(path).unwrap();
+    let bytes = maybe_bytes.as_deref().unwrap_or(b"<not-found>".as_slice());
+    let mut stderr = std::io::stderr();
+    stderr.write_all(bytes).unwrap();
+    stderr.flush().unwrap();
 }
