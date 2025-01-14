@@ -1,9 +1,8 @@
+use std::str::FromStr;
+
 use nargo_core::{error::Context as _, nargo};
 
 use crate::input::{self, DepKind, PkgId};
-
-const CRATES_IO_REGISTRY: &str =
-    "registry+https://github.com/rust-lang/crates.io-index";
 
 #[derive(Copy, Clone)]
 pub struct Context<'a> {
@@ -70,11 +69,11 @@ impl<'a> input::Manifest<'a> {
         // non-workspace crates.
         if !self.is_workspace_pkg() {
             self.targets.retain(|target| {
-                target.kind.iter().any(|&kind| {
-                    kind == "lib"
-                        || kind == "proc-macro"
-                        || kind == "custom-build"
-                })
+                let kind = target.target_kind();
+                let any_linkable = target.crate_types.iter().any(|&s| {
+                    nargo::CrateType::from_str(s).unwrap().is_linkable()
+                });
+                kind.is_custom_build() || (kind.is_lib() && any_linkable)
             });
         }
 
@@ -129,8 +128,7 @@ impl<'a> input::ManifestTarget<'a> {
     fn clean(&mut self, id: PkgId<'a>, manifest_dir: &'a str) {
         let src_path = self.src_path;
 
-        self.src_path =
-            src_path
+        self.src_path = src_path
             .strip_prefix(manifest_dir)
             .with_context(|| format!(
                 "A Cargo.toml's target src_path is outside the crate directory:\n\
@@ -196,7 +194,7 @@ impl<'a> input::PkgId<'a> {
 
 impl input::Source<'_> {
     fn clean(&mut self) {
-        if self.0 == CRATES_IO_REGISTRY {
+        if self.0 == nargo::CRATES_IO_REGISTRY {
             *self = Self::CRATES_IO
         }
     }

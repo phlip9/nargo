@@ -188,6 +188,56 @@ impl<'a> Metadata<'a> {
             .expect("Failed to serialize output json");
         buf
     }
+
+    /// Assert various invariants about the produced `Cargo.metadata.json`.
+    pub fn assert_invariants(&self) {
+        // `workspace_default_members`
+        for pkg_id in &self.workspace_default_members {
+            // ...is a strict subset of `workspace_members`
+            assert!(self.workspace_members.contains(pkg_id), "{pkg_id}");
+        }
+
+        // `workspace_members`
+        for pkg_id in &self.workspace_members {
+            let pkg = self.packages.get(pkg_id).context(pkg_id).expect(
+                "invariant: workspace member not present in generated `packages`",
+            );
+            assert_eq!(
+                pkg.source, None,
+                "invariant: workspace member with `source` field"
+            );
+        }
+
+        // `packages`
+        for (pkg_id, pkg) in &self.packages {
+            // Check `pkg.hash` and `pkg.path` are appropriate for workspace vs
+            // non-workspace
+            if pkg.is_workspace() {
+                assert_eq!(pkg.hash, None, "{pkg_id}");
+                assert_ne!(pkg.path, None, "{pkg_id}");
+            } else {
+                assert!(pkg.hash.is_some() || pkg.path.is_some(), "{pkg_id}");
+            }
+
+            // Check `pkg.deps`
+            for dep_pkg_id in pkg.deps.keys() {
+                let dep_pkg = self
+                    .packages
+                    .get(dep_pkg_id)
+                    .with_context(|| format!("invariant: missing dep package for package: pkg: {pkg_id}, dep: {dep_pkg_id}"))
+                    .unwrap();
+
+                // deps should have a `lib` target
+                if !dep_pkg
+                    .targets
+                    .iter()
+                    .any(|target| target.kind == TargetKind::Lib)
+                {
+                    panic!("invariant: {pkg_id} depends on {dep_pkg_id}, but {dep_pkg_id} doesn't have a `lib` target")
+                }
+            }
+        }
+    }
 }
 
 //
@@ -295,6 +345,12 @@ impl<'a> Package<'a> {
             deps,
             targets,
         }
+    }
+
+    /// Returns true if the package is a workspace member.
+    #[inline]
+    pub(crate) fn is_workspace(&self) -> bool {
+        self.source.is_none()
     }
 
     /// Returns true if the package is a crates.io dependency.
@@ -498,12 +554,6 @@ impl<'a> PkgDepKind<'a> {
 
 impl<'a> ManifestTarget<'a> {
     fn from_input(target: &'a input::ManifestTarget<'a>) -> Self {
-        let kind = {
-            let kinds = target.kind.iter().copied();
-            let crate_types = target.crate_types.iter().copied();
-            TargetKind::try_from_cargo_kind(kinds, crate_types)
-        };
-
         // check crate_types
         for crate_type in &target.crate_types {
             let _ = CrateType::from_str(crate_type).unwrap();
@@ -511,7 +561,7 @@ impl<'a> ManifestTarget<'a> {
 
         Self {
             name: target.name,
-            kind,
+            kind: target.target_kind(),
             crate_types: Cow::Borrowed(&target.crate_types),
             required_features: Cow::Borrowed(&target.required_features),
             path: target.src_path,

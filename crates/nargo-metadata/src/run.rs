@@ -34,8 +34,8 @@ pub fn run(args: Args<'_>) {
             )
         });
 
+    // Clean the input `cargo metadata`
     let before_num_pkgs = input.resolve.nodes.len();
-
     let workspace_root = input.workspace_root;
     let ctx = clean::Context { workspace_root };
     time!("clean input", input.clean(ctx));
@@ -46,6 +46,8 @@ pub fn run(args: Args<'_>) {
         .map(|pkg| (pkg.id, pkg))
         .collect();
 
+    // Build the output `Cargo.metadata.json` struct from the cleaned input
+    // and an optional pre-existing `Cargo.metadata.json` file.
     let mut output = time!(
         "build output",
         output::Metadata::from_input(
@@ -59,13 +61,19 @@ pub fn run(args: Args<'_>) {
         ),
     );
 
-    let after_num_pkgs = output.packages.len();
-    assert_eq!(after_num_pkgs, before_num_pkgs);
-
+    // If we're running outside the nix sandbox, by default we'll ask `nix` to
+    // prefetch each crates.io dependency into the /nix/store and return the
+    // content hash, which we'll pin in the output.
     if args.nix_prefetch {
         time!("prefetch", prefetch::prefetch(&mut output));
     }
 
+    // Assert invariants on output.
+    let after_num_pkgs = output.packages.len();
+    assert_eq!(after_num_pkgs, before_num_pkgs);
+    time!("assert invariants", output.assert_invariants());
+
+    // Serialize to human-readable `Cargo.metadata.json`
     let output_bytes = time!("serialize output", output.serialize_pretty());
 
     // if  no --check, just write the output

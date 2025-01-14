@@ -2,7 +2,7 @@
 
 use std::{cmp, collections::BTreeMap, fmt};
 
-use nargo_core::error::Context as _;
+use nargo_core::{error::Context as _, nargo};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 
@@ -199,6 +199,18 @@ impl<'a> Manifest<'a> {
         } else {
             None
         }
+    }
+}
+
+//
+// --- impl ManifestTarget ---
+//
+
+impl ManifestTarget<'_> {
+    pub fn target_kind(&self) -> nargo::TargetKind {
+        let kinds = self.kind.iter().copied();
+        let crate_types = self.crate_types.iter().copied();
+        nargo::TargetKind::try_from_cargo_kind(kinds, crate_types)
     }
 }
 

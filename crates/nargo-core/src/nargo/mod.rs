@@ -10,7 +10,7 @@ use crate::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-const CRATES_IO_REGISTRY: &str =
+pub const CRATES_IO_REGISTRY: &str =
     "registry+https://github.com/rust-lang/crates.io-index";
 
 /// A nargo-specific compact package ID. Conveniently, it is always a strict
@@ -161,6 +161,16 @@ impl TargetKind {
             Self::ExampleLib => 'e',
             Self::CustomBuild => 'c',
         }
+    }
+
+    #[inline]
+    pub fn is_lib(&self) -> bool {
+        matches!(self, Self::Lib)
+    }
+
+    #[inline]
+    pub fn is_custom_build(&self) -> bool {
+        matches!(self, Self::CustomBuild)
     }
 }
 
