@@ -21,7 +21,7 @@
     nargo-rustc = nargoLib.nargo-rustc;
   };
 
-  checksAll = builtins.listToAttrs (lib.flatten (_flattenTests "tests" {
+  checks = _mkTestGroup "" {
     targetCfg = targetCfg;
     examples = builtins.mapAttrs (_: value:
       builtins.intersectAttrs {
@@ -32,88 +32,121 @@
       value)
     examples;
     packages = packages;
-  }));
+  };
 
   # ignore broken tests
   ignored = [
     # TODO(phlip9): openssl-sys build.rs
-    "tests-examples-crane-codesign-build"
-    "tests-examples-gitoxide-build"
-    "tests-examples-nushell-build"
+    "examples-crane-codesign-build"
+    "examples-gitoxide-build"
+    "examples-nushell-build"
 
     # TODO(phlip9): openssl linking?
-    "tests-examples-hickory-dns-build"
+    "examples-hickory-dns-build"
 
     # TODO(phlip9): jemalloc-sys build.rs
-    "tests-examples-fd-build"
+    "examples-fd-build"
 
     # TODO(phlip9): grpcio-sys build.rs
-    "tests-examples-crane-grpcio-test-build"
+    "examples-crane-grpcio-test-build"
 
     # TODO(phlip9): linked panic runtime `panic_unwind` not compiled with
     # crate's panic strategy `abort`
-    "tests-examples-pkg-targets-build"
+    "examples-pkg-targets-build"
 
     # TODO(phlip9): support dep with Cargo.toml lib.name override
     # (ex: crate `new_debug_unreachable` uses `lib.name = "debug_unreachable"`)
-    "tests-examples-nocargo-crate-names-build"
-    "tests-examples-nocargo-custom-lib-name-build"
-    "tests-examples-starlark-rust-build"
+    "examples-nocargo-crate-names-build"
+    "examples-nocargo-custom-lib-name-build"
+    "examples-starlark-rust-build"
 
     # TODO(phlip9): build.rs `CARGO_MANIFEST_LINKS` is unset
-    "tests-examples-wasmtime-build"
+    "examples-wasmtime-build"
 
     # TODO(phlip9): examples with custom target selection
-    "tests-examples-crane-dependencyBuildScriptPerms-build"
-    "tests-examples-crane-simple-only-tests-build"
-    "tests-examples-crane-with-libs-build"
-    "tests-examples-crane-with-libs-some-dep-build"
-    "tests-examples-crane-workspace-git-build"
-    "tests-examples-nocargo-workspace-proc-macro-lto-build"
-    "tests-examples-rand-build"
+    "examples-crane-dependencyBuildScriptPerms-build"
+    "examples-crane-simple-only-tests-build"
+    "examples-crane-with-libs-build"
+    "examples-crane-with-libs-some-dep-build"
+    "examples-crane-workspace-git-build"
+    "examples-nocargo-workspace-proc-macro-lto-build"
+    "examples-rand-build"
 
     # TODO(phlip9): build.rs trying to write to `$src/target` dir
-    "tests-examples-crane-with-build-script-build"
-    "tests-examples-crane-with-build-script-custom-build"
-    "tests-examples-rage-build"
+    "examples-crane-with-build-script-build"
+    "examples-crane-with-build-script-custom-build"
+    "examples-rage-build"
 
     # TODO(phlip9): build.rs cargo::rustc-link-{lib,search} propagation
-    "tests-examples-nocargo-libz-dynamic-build"
+    "examples-nocargo-libz-dynamic-build"
 
     # TODO(phlip9): build.rs `DEP_Z_INCLUDE` env missing
-    "tests-examples-nocargo-libz-static-build"
+    "examples-nocargo-libz-static-build"
 
     # TODO(phlip9): build.rs cmake + bindgen
-    "tests-examples-crane-highs-sys-test-build"
+    "examples-crane-highs-sys-test-build"
   ];
-  checks = builtins.removeAttrs checksAll ignored;
+  checksFlat = builtins.removeAttrs (builtins.listToAttrs checks._tests) ignored;
 
   # circumvent garnix's max 100-top-level-packages limit by making a giant
   # symlink join over all checks, so they only count as one "package".
-  garnix-all-checks = pkgs.linkFarm "garnix-all-checks" checks;
+  garnix-all-checks = pkgs.linkFarm "garnix-all-checks" checksFlat;
 
-  _flattenTests = prefix: v:
-    if lib.isDerivation v
-    then {
-      name = prefix;
-      value = v;
-    }
-    else if lib.isType "assertion" v
-    then {
-      name = prefix;
-      value = v.fn prefix;
-    }
-    else if lib.isFunction v
-    then _flattenTests prefix (v _testFnArgs)
-    else if lib.isAttrs v
-    then lib.mapAttrsToList (name: _flattenTests "${prefix}-${name}") v
-    else throw "Unexpect test type: ${builtins.typeOf v}";
+  _mkTestGroup = prefix: value:
+  # case: derivation
+    if lib.isDerivation value
+    then
+      (value
+        // {
+          _tests = [
+            {
+              name = prefix;
+              value = value;
+            }
+          ];
+        })
+    # case: assertion
+    else if lib.isType "assertion" value
+    then _mkTestGroup prefix (value.fn prefix)
+    # case: eval test fn
+    else if lib.isFunction value
+    then _mkTestGroup prefix (value _testFnArgs)
+    # case: attrset test group
+    else if lib.isAttrs value
+    then let
+      subTestGroups =
+        builtins.mapAttrs
+        (
+          name:
+            _mkTestGroup
+            (
+              if builtins.stringLength prefix != 0
+              then "${prefix}-${name}"
+              else name
+            )
+        )
+        value;
+      testGroup = builtins.concatLists (builtins.map
+        (subTestGroup: subTestGroup._tests)
+        (builtins.attrValues subTestGroups));
+      testGroupDrv = pkgs.linkFarm prefix (builtins.listToAttrs testGroup);
+    in
+      subTestGroups
+      // {
+        # group derivation that builds all tests in the test group
+        type = "derivation";
+        outputs = ["out"];
+        inherit (testGroupDrv) out outPath outputName drvPath name system;
+        # subtests
+        _tests = testGroup;
+      }
+    else throw "Unexpected test type: ${prefix}: ${builtins.typeOf value}";
 
   _testFnArgs = {
-    assertEq = got: expect: {
+    assertEq = actual: expect: {
       _type = "assertion";
       fn = name:
-        if builtins.toJSON got == builtins.toJSON expect
+        if builtins.toJSON actual == builtins.toJSON expect
         then
           derivation {
             name = "ok";
@@ -124,21 +157,21 @@
         else
           pkgs.runCommand "${name}-assert-eq-fail" {
             nativeBuildInputs = [pkgs.jq];
-            got = builtins.toJSON got;
+            actual = builtins.toJSON actual;
             expect = builtins.toJSON expect;
           } ''
-            if [[ ''${#got} < 32 && ''${#expect} < 32 ]]; then
-              echo "got:    $got"
+            if [[ ''${#actual} < 32 && ''${#expect} < 32 ]]; then
+              echo "actual: $actual"
               echo "expect: $expect"
             else
-              echo "got:"
-              jq . <<<"$got"
+              echo "actual:"
+              jq . <<<"$actual"
               echo
               echo "expect:"
               jq . <<<"$expect"
               echo
               echo "diff:"
-              diff -y <(jq . <<<"$got") <(jq . <<<"$expect")
+              diff -y <(jq . <<<"$actual") <(jq . <<<"$expect")
               exit 1
             fi
           '';

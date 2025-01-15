@@ -84,7 +84,7 @@
         pkgs = systemPkgs.${system};
       });
 
-    checks = eachSystem (system: self.tests.${system}.checks);
+    checks = eachSystem (system: self.tests.${system}.checksFlat);
 
     formatter = eachSystemPkgs (pkgs: pkgs.alejandra);
 
