@@ -9,7 +9,7 @@
   # An extension on `nargoLib` with dev-/test-only entries.
   nargoTestLib = import ./lib {inherit craneLib lib pkgs nargoLib;};
 
-  examples = import ./examples {inherit craneLib inputsTest nargoLib nargoTestLib pkgs;};
+  examples = import ./examples {inherit craneLib inputsTest lib nargoLib nargoTestLib pkgs;};
 
   resolve = import ./resolve.nix {inherit nargoLib;};
 
@@ -21,17 +21,72 @@
     nargo-rustc = nargoLib.nargo-rustc;
   };
 
-  checks = builtins.listToAttrs (lib.flatten (_flattenTests "tests" {
+  checksAll = builtins.listToAttrs (lib.flatten (_flattenTests "tests" {
     targetCfg = targetCfg;
     examples = builtins.mapAttrs (_: value:
       builtins.intersectAttrs {
         metadataDrv = null;
         checkResolveFeatures = null;
+        build = null;
       }
       value)
     examples;
     packages = packages;
   }));
+
+  # ignore broken tests
+  ignored = [
+    # TODO(phlip9): openssl-sys build.rs
+    "tests-examples-crane-codesign-build"
+    "tests-examples-gitoxide-build"
+    "tests-examples-nushell-build"
+
+    # TODO(phlip9): openssl linking?
+    "tests-examples-hickory-dns-build"
+
+    # TODO(phlip9): jemalloc-sys build.rs
+    "tests-examples-fd-build"
+
+    # TODO(phlip9): grpcio-sys build.rs
+    "tests-examples-crane-grpcio-test-build"
+
+    # TODO(phlip9): linked panic runtime `panic_unwind` not compiled with
+    # crate's panic strategy `abort`
+    "tests-examples-pkg-targets-build"
+
+    # TODO(phlip9): support dep with Cargo.toml lib.name override
+    # (ex: crate `new_debug_unreachable` uses `lib.name = "debug_unreachable"`)
+    "tests-examples-nocargo-crate-names-build"
+    "tests-examples-nocargo-custom-lib-name-build"
+    "tests-examples-starlark-rust-build"
+
+    # TODO(phlip9): build.rs `CARGO_MANIFEST_LINKS` is unset
+    "tests-examples-wasmtime-build"
+
+    # TODO(phlip9): examples with custom target selection
+    "tests-examples-crane-dependencyBuildScriptPerms-build"
+    "tests-examples-crane-simple-only-tests-build"
+    "tests-examples-crane-with-libs-build"
+    "tests-examples-crane-with-libs-some-dep-build"
+    "tests-examples-crane-workspace-git-build"
+    "tests-examples-nocargo-workspace-proc-macro-lto-build"
+    "tests-examples-rand-build"
+
+    # TODO(phlip9): build.rs trying to write to `$src/target` dir
+    "tests-examples-crane-with-build-script-build"
+    "tests-examples-crane-with-build-script-custom-build"
+    "tests-examples-rage-build"
+
+    # TODO(phlip9): build.rs cargo::rustc-link-{lib,search} propagation
+    "tests-examples-nocargo-libz-dynamic-build"
+
+    # TODO(phlip9): build.rs `DEP_Z_INCLUDE` env missing
+    "tests-examples-nocargo-libz-static-build"
+
+    # TODO(phlip9): build.rs cmake + bindgen
+    "tests-examples-crane-highs-sys-test-build"
+  ];
+  checks = builtins.removeAttrs checksAll ignored;
 
   # circumvent garnix's max 100-top-level-packages limit by making a giant
   # symlink join over all checks, so they only count as one "package".

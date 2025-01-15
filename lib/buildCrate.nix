@@ -1,3 +1,6 @@
+#
+# `nargoLib.buildCrate` - build a single crate target
+#
 {
   lib,
   nargo-rustc,

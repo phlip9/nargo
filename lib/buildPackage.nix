@@ -136,7 +136,12 @@ in
       nargo: error: No targets selected. `packages` probably contains non-existent
       packages or the target filters are too strict.
 
-      See available packages: ${metadata.workspace_members}"
+      Available packages: ${builtins.toJSON metadata.workspace_members}
+
+      Current target filters:
+      lib = ${builtins.toJSON lib}
+      bins = ${builtins.toJSON bins}
+      packages = ${builtins.toJSON packages}
     ''
   else if numSelected == 1
   then builtins.elemAt selectedPkgs 0

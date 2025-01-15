@@ -1,4 +1,5 @@
 {
+  lib,
   craneLib,
   inputsTest,
   nargoLib,
@@ -108,12 +109,20 @@
       '';
 
     # Build with `nargoLib.buildPackage`
-    build = nargoLib.buildPackage {
+    buildInner = nargoLib.buildPackage {
       pname = name;
       version = "0.0.0";
       workspacePath = srcCleaned;
       metadata = metadata;
       pkgsCross = pkgs;
+    };
+
+    # Wrap `buildInner` with `lazyDerivation` to improve test collection time.
+    # Otherwise we have to do some hefty IFD and eval to get the final top-level
+    # derivation from `buildGraph`, just to check if the attr is a derivation.
+    build = lib.lazyDerivation {
+      derivation = buildInner;
+      meta = {};
     };
 
     # `nargoLib.buildGraph`
