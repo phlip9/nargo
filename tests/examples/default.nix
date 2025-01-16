@@ -11,16 +11,14 @@
 
   mkExample = {
     name,
-    src ? builtins.throw "Must specify `src` or `srcCleaned`",
-    srcCleaned ? craneLib.cleanCargoSource src,
+    src,
     ...
   }: rec {
-    src = srcCleaned;
-    cargoVendorDir = craneLib.vendorCargoDeps {src = srcCleaned;};
+    cargoVendorDir = craneLib.vendorCargoDeps {src = src;};
 
     metadataDrv = nargoTestLib.generateCargoMetadata {
       inherit cargoVendorDir name;
-      src = srcCleaned;
+      src = src;
     };
     metadataNoCtx = builtins.fromJSON (
       # To reduce the maintainence burden for all these example crates, I want to
@@ -52,7 +50,7 @@
         depsBuildBuild = [pkgs.cargo];
         env = {
           inherit cargoVendorDir hostTarget;
-          cargoSrc = "${srcCleaned}";
+          cargoSrc = "${src}";
         };
       }
       ''
@@ -80,7 +78,7 @@
 
         env = {
           inherit cargoUnitGraph hostTarget;
-          cargoSrc = "${srcCleaned}";
+          cargoSrc = "${src}";
         };
 
         # TODO(phlip9): this is more space-efficient, but harder to debug since
@@ -113,7 +111,7 @@
     buildInner = nargoLib.buildPackage {
       pname = name;
       version = "0.0.0";
-      workspacePath = srcCleaned;
+      workspacePath = src;
       metadata = metadata;
       pkgsCross = pkgs;
     };
@@ -128,7 +126,7 @@
 
     # `nargoLib.buildGraph`
     buildGraph = nargoLib.buildGraph.buildGraph {
-      workspacePath = srcCleaned;
+      workspacePath = src;
       metadata = metadata;
       pkgsCross = pkgs;
       buildTarget = buildTarget;
@@ -147,8 +145,7 @@
   mkNixpkgsExample = {pkg, ...} @ args:
     mkExample ({
         name = pkg.name;
-        # nixpkgs rust packages are already cleaned
-        srcCleaned = pkg.src;
+        src = pkg.src;
       }
       // removeAttrs args ["pkg"]);
 
