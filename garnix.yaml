@@ -4,5 +4,5 @@ builds:
   include:
   # doesn't seem to want to build this...
   # - "tests.x86_64-linux.garnix-all-checks"
-  - "packages.x86_64-linux.*"
+  - "packages.x86_64-linux.garnix-check-shards.*"
   - "devShells.x86_64-linux.*"

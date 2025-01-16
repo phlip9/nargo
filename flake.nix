@@ -47,16 +47,18 @@
     # Private
     #
 
-    packages = eachSystem (system: let
-      nargoLib = systemNargoLib.${system};
-    in {
-      # smuggle this in via `packages` to get garnix to build it
-      garnix-all-checks = self.tests.${system}.garnix-all-checks;
+    packages = eachSystem (
+      system: let
+        nargoLib = systemNargoLib.${system};
+      in {
+        # smuggle this in via `packages` to get garnix to build it
+        garnix-check-shards = self.tests.${system}.garnix-check-shards;
 
-      nargo-metadata = nargoLib.nargo-metadata;
-      nargo-resolve = nargoLib.nargo-resolve;
-      nargo-rustc = nargoLib.nargo-rustc;
-    });
+        nargo-metadata = nargoLib.nargo-metadata;
+        nargo-resolve = nargoLib.nargo-resolve;
+        nargo-rustc = nargoLib.nargo-rustc;
+      }
+    );
 
     devShells = eachSystem (
       system: let

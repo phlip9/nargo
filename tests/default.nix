@@ -88,9 +88,32 @@
   };
   checksFlat = builtins.listToAttrs checks._tests;
 
-  # circumvent garnix's max 100-top-level-packages limit by making a giant
-  # symlink join over all checks, so they only count as one "package".
-  garnix-all-checks = pkgs.linkFarm "garnix-all-checks" checksFlat;
+  # work around garnix's max 100-top-level-packages limit and 30 minute build
+  # timeout by sharding our tests into chunks.
+  garnix-check-shards = let
+    numShards = 20;
+    tests = checks._tests;
+    numTests = builtins.length tests;
+    testsPerShard = builtins.div numTests numShards;
+
+    mkShard = shardIdx: let
+      idxStart = testsPerShard * shardIdx;
+      idxEnd =
+        if shardIdx == numShards - 1
+        then numTests
+        else testsPerShard * (shardIdx + 1);
+      shardId =
+        if shardIdx < 10
+        then "0${builtins.toString shardIdx}"
+        else builtins.toString shardIdx;
+      shardName = "garnix-check-shard-${shardId}";
+      shardTests = builtins.genList (idx: builtins.elemAt tests (idxStart + idx)) (idxEnd - idxStart);
+    in {
+      name = shardName;
+      value = pkgs.linkFarm shardName (builtins.listToAttrs shardTests);
+    };
+  in
+    builtins.listToAttrs (builtins.genList mkShard numShards);
 
   _mkTestGroup = prefix: value:
   # case: derivation
