@@ -13,7 +13,7 @@
     name,
     src,
     ...
-  }: rec {
+  } @ args: rec {
     cargoVendorDir = craneLib.vendorCargoDeps {src = src;};
 
     metadataDrv = nargoTestLib.generateCargoMetadata {
@@ -114,6 +114,9 @@
       workspacePath = src;
       metadata = metadata;
       pkgsCross = pkgs;
+
+      lib = args.lib or false;
+      bins = args.bins or true;
     };
 
     # Wrap `buildInner` with `lazyDerivation` to improve test collection time.
@@ -245,6 +248,7 @@ in {
         cp -r $src_raw/* $out/
         cp $src_raw/Cargo.lock.msrv $out/Cargo.lock
       '';
+    lib = true;
   };
 
   #
@@ -258,7 +262,10 @@ in {
   crane-codesign = mkCraneExample {crate = "codesign";};
   crane-features = mkCraneExample {crate = "features/features";};
   crane-custom-dummy = mkCraneExample {crate = "custom-dummy";};
-  crane-dependencyBuildScriptPerms = mkCraneExample {crate = "dependencyBuildScriptPerms";};
+  crane-dependencyBuildScriptPerms = mkCraneExample {
+    crate = "dependencyBuildScriptPerms";
+    lib = true;
+  };
   crane-git-overlapping = mkCraneExample {crate = "git-overlapping";};
   crane-git-repo-with-many-crates = mkCraneExample {crate = "git-repo-with-many-crates";};
   crane-gitRevNoRef = mkCraneExample {crate = "gitRevNoRef";};
@@ -268,23 +275,37 @@ in {
   crane-manually-vendored = mkCraneExample {crate = "manually-vendored";};
   crane-no_std = mkCraneExample {crate = "no_std";};
   crane-overlapping-targets = mkCraneExample {crate = "overlapping-targets";};
-  # TODO(phlip9): decide how to handle building proc-macro as top-level target
-  # crane-proc-macro = mkCraneExample {crate = "proc-macro";};
+  crane-proc-macro = mkCraneExample {
+    crate = "proc-macro";
+    lib = true;
+  };
   crane-simple = mkCraneExample {crate = "simple";};
   crane-simple-git = mkCraneExample {crate = "simple-git";};
   crane-simple-git-workspace-inheritance = mkCraneExample {crate = "simple-git-workspace-inheritance";};
   crane-simple-no-deps = mkCraneExample {crate = "simple-no-deps";};
-  crane-simple-only-tests = mkCraneExample {crate = "simple-only-tests";};
+  crane-simple-only-tests = mkCraneExample {
+    crate = "simple-only-tests";
+    lib = true;
+  };
   crane-simple-with-audit-toml = mkCraneExample {crate = "simple-with-audit-toml";};
   crane-simple-with-deny-toml = mkCraneExample {crate = "simple-with-deny-toml";};
   crane-trunk = mkCraneExample {crate = "trunk";};
   crane-various-targets = mkCraneExample {crate = "various-targets";};
   crane-with-build-script = mkCraneExample {crate = "with-build-script";};
   crane-with-build-script-custom = mkCraneExample {crate = "with-build-script-custom";};
-  crane-with-libs = mkCraneExample {crate = "with-libs";};
-  crane-with-libs-some-dep = mkCraneExample {crate = "with-libs/some-dep";};
+  crane-with-libs = mkCraneExample {
+    crate = "with-libs";
+    lib = true;
+  };
+  crane-with-libs-some-dep = mkCraneExample {
+    crate = "with-libs/some-dep";
+    lib = true;
+  };
   crane-workspace = mkCraneExample {crate = "workspace";};
-  crane-workspace-git = mkCraneExample {crate = "workspace-git";};
+  crane-workspace-git = mkCraneExample {
+    crate = "workspace-git";
+    lib = true;
+  };
   crane-workspace-hack = mkCraneExample {crate = "workspace-hack";};
   crane-workspace-inheritance = mkCraneExample {crate = "workspace-inheritance";};
   crane-workspace-not-at-root = mkCraneExample {crate = "workspace-not-at-root/workspace";};
@@ -307,6 +328,9 @@ in {
   nocargo-lto-thin = mkNocargoExample {crate = "lto-thin";};
   nocargo-tokio-app = mkNocargoExample {crate = "tokio-app";};
   nocargo-workspace-inline = mkNocargoExample {crate = "workspace-inline";};
-  nocargo-workspace-proc-macro-lto = mkNocargoExample {crate = "workspace-proc-macro-lto";};
+  nocargo-workspace-proc-macro-lto = mkNocargoExample {
+    crate = "workspace-proc-macro-lto";
+    lib = true;
+  };
   nocargo-workspace-virtual = mkNocargoExample {crate = "workspace-virtual";};
 }

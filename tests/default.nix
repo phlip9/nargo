@@ -63,14 +63,8 @@
     # TODO(phlip9): build.rs `CARGO_MANIFEST_LINKS` is unset
     examples-wasmtime-build = null;
 
-    # TODO(phlip9): examples with custom target selection
-    examples-crane-dependencyBuildScriptPerms-build = null;
-    examples-crane-simple-only-tests-build = null;
+    # TODO(phlip9): nargo-rustc handle multiple output libs
     examples-crane-with-libs-build = null;
-    examples-crane-with-libs-some-dep-build = null;
-    examples-crane-workspace-git-build = null;
-    examples-nocargo-workspace-proc-macro-lto-build = null;
-    examples-rand-build = null;
 
     # TODO(phlip9): build.rs trying to write to `$src/target` dir
     examples-crane-with-build-script-build = null;
