@@ -7,12 +7,13 @@
   pkgs,
 }: let
   # imports
-  inherit (builtins) baseNameOf;
+  inherit (builtins) baseNameOf removeAttrs;
 
   mkExample = {
     name,
     src ? builtins.throw "Must specify `src` or `srcCleaned`",
     srcCleaned ? craneLib.cleanCargoSource src,
+    ...
   }: rec {
     src = srcCleaned;
     cargoVendorDir = craneLib.vendorCargoDeps {src = srcCleaned;};
@@ -136,18 +137,20 @@
     };
   };
 
-  mkLocalExample = src:
-    mkExample {
-      src = src;
-      name = baseNameOf src;
-    };
+  mkLocalExample = {src, ...} @ args:
+    mkExample ({
+        src = src;
+        name = baseNameOf src;
+      }
+      // removeAttrs args ["src"]);
 
-  mkNixpkgsExample = pkg:
-    mkExample {
-      name = pkg.name;
-      # nixpkgs rust packages are already cleaned
-      srcCleaned = pkg.src;
-    };
+  mkNixpkgsExample = {pkg, ...} @ args:
+    mkExample ({
+        name = pkg.name;
+        # nixpkgs rust packages are already cleaned
+        srcCleaned = pkg.src;
+      }
+      // removeAttrs args ["pkg"]);
 
   nocargoSrc = pkgs.fetchFromGitHub {
     owner = "oxalica";
@@ -156,17 +159,19 @@
     hash = "sha256-ZgVnsJ/Pw51o2Zg+WS4pU4EC0zj526qxj/2IXxyDMiY=";
   };
 
-  mkNocargoExample = crate:
-    mkExample {
-      name = crate;
-      src = nocargoSrc + "/tests/${crate}";
-    };
+  mkNocargoExample = {crate, ...} @ args:
+    mkExample ({
+        name = crate;
+        src = nocargoSrc + "/tests/${crate}";
+      }
+      // removeAttrs args ["crate"]);
 
-  mkCraneExample = path:
-    mkExample {
-      name = baseNameOf path;
-      src = inputsTest.crane + "/${path}";
-    };
+  mkCraneExample = {crate, ...} @ args:
+    mkExample ({
+        name = baseNameOf crate;
+        src = inputsTest.crane + "/checks/${crate}";
+      }
+      // removeAttrs args ["crate"]);
 
   # For a `Cargo.metadata.json` read from a derivation output (IFD), we need to
   # manually fixup the nix string-context for each vendored package `path`.
@@ -203,24 +208,24 @@ in {
   # Internal example crates
   #
 
-  dep-versions = mkLocalExample ./dep-versions;
-  dependency-v3 = mkLocalExample ./dependency-v3;
-  hello-world-bin = mkLocalExample ./hello-world-bin;
-  pkg-targets = mkLocalExample ./pkg-targets;
+  dep-versions = mkLocalExample {src = ./dep-versions;};
+  dependency-v3 = mkLocalExample {src = ./dependency-v3;};
+  hello-world-bin = mkLocalExample {src = ./hello-world-bin;};
+  pkg-targets = mkLocalExample {src = ./pkg-targets;};
 
   #
   # nixpkgs rust packages
   #
 
-  cargo-hack = mkNixpkgsExample pkgs.cargo-hack;
-  fd = mkNixpkgsExample pkgs.fd;
-  gitoxide = mkNixpkgsExample pkgs.gitoxide;
-  hickory-dns = mkNixpkgsExample pkgs.trust-dns;
-  nushell = mkNixpkgsExample pkgs.nushell;
-  rage = mkNixpkgsExample pkgs.rage;
-  ripgrep = mkNixpkgsExample pkgs.ripgrep;
-  starlark-rust = mkNixpkgsExample pkgs.starlark-rust;
-  wasmtime = mkNixpkgsExample pkgs.wasmtime;
+  cargo-hack = mkNixpkgsExample {pkg = pkgs.cargo-hack;};
+  fd = mkNixpkgsExample {pkg = pkgs.fd;};
+  gitoxide = mkNixpkgsExample {pkg = pkgs.gitoxide;};
+  hickory-dns = mkNixpkgsExample {pkg = pkgs.trust-dns;};
+  nushell = mkNixpkgsExample {pkg = pkgs.nushell;};
+  rage = mkNixpkgsExample {pkg = pkgs.rage;};
+  ripgrep = mkNixpkgsExample {pkg = pkgs.ripgrep;};
+  starlark-rust = mkNixpkgsExample {pkg = pkgs.starlark-rust;};
+  wasmtime = mkNixpkgsExample {pkg = pkgs.wasmtime;};
 
   #
   # Github example crates
@@ -249,64 +254,62 @@ in {
   # crane tests/pkgs
   #
 
-  crane-utils = mkCraneExample "pkgs/crane-utils";
-
   # TODO(phlip9): support cargo bindeps
-  # crane-bindeps = mkCraneExample "checks/bindeps";
-  crane-bzip2-sys = mkCraneExample "checks/bzip2-sys";
-  crane-clippytest = mkCraneExample "checks/clippy/clippytest";
-  crane-codesign = mkCraneExample "checks/codesign";
-  crane-features = mkCraneExample "checks/features/features";
-  crane-custom-dummy = mkCraneExample "checks/custom-dummy";
-  crane-dependencyBuildScriptPerms = mkCraneExample "checks/dependencyBuildScriptPerms";
-  crane-git-overlapping = mkCraneExample "checks/git-overlapping";
-  crane-git-repo-with-many-crates = mkCraneExample "checks/git-repo-with-many-crates";
-  crane-gitRevNoRef = mkCraneExample "checks/gitRevNoRef";
-  crane-grpcio-test = mkCraneExample "checks/grpcio-test";
-  crane-highs-sys-test = mkCraneExample "checks/highs-sys-test";
-  # crane-illegal-bin = mkCraneExample "checks/illegal-bin";
-  crane-manually-vendored = mkCraneExample "checks/manually-vendored";
-  crane-no_std = mkCraneExample "checks/no_std";
-  crane-overlapping-targets = mkCraneExample "checks/overlapping-targets";
+  # crane-bindeps = mkCraneExample {crate = "bindeps";};
+  crane-bzip2-sys = mkCraneExample {crate = "bzip2-sys";};
+  crane-clippytest = mkCraneExample {crate = "clippy/clippytest";};
+  crane-codesign = mkCraneExample {crate = "codesign";};
+  crane-features = mkCraneExample {crate = "features/features";};
+  crane-custom-dummy = mkCraneExample {crate = "custom-dummy";};
+  crane-dependencyBuildScriptPerms = mkCraneExample {crate = "dependencyBuildScriptPerms";};
+  crane-git-overlapping = mkCraneExample {crate = "git-overlapping";};
+  crane-git-repo-with-many-crates = mkCraneExample {crate = "git-repo-with-many-crates";};
+  crane-gitRevNoRef = mkCraneExample {crate = "gitRevNoRef";};
+  crane-grpcio-test = mkCraneExample {crate = "grpcio-test";};
+  crane-highs-sys-test = mkCraneExample {crate = "highs-sys-test";};
+  # crane-illegal-bin = mkCraneExample {crate = "illegal-bin";};
+  crane-manually-vendored = mkCraneExample {crate = "manually-vendored";};
+  crane-no_std = mkCraneExample {crate = "no_std";};
+  crane-overlapping-targets = mkCraneExample {crate = "overlapping-targets";};
   # TODO(phlip9): decide how to handle building proc-macro as top-level target
-  # crane-proc-macro = mkCraneExample "checks/proc-macro";
-  crane-simple = mkCraneExample "checks/simple";
-  crane-simple-git = mkCraneExample "checks/simple-git";
-  crane-simple-git-workspace-inheritance = mkCraneExample "checks/simple-git-workspace-inheritance";
-  crane-simple-no-deps = mkCraneExample "checks/simple-no-deps";
-  crane-simple-only-tests = mkCraneExample "checks/simple-only-tests";
-  crane-simple-with-audit-toml = mkCraneExample "checks/simple-with-audit-toml";
-  crane-simple-with-deny-toml = mkCraneExample "checks/simple-with-deny-toml";
-  crane-trunk = mkCraneExample "checks/trunk";
-  crane-various-targets = mkCraneExample "checks/various-targets";
-  crane-with-build-script = mkCraneExample "checks/with-build-script";
-  crane-with-build-script-custom = mkCraneExample "checks/with-build-script-custom";
-  crane-with-libs = mkCraneExample "checks/with-libs";
-  crane-with-libs-some-dep = mkCraneExample "checks/with-libs/some-dep";
-  crane-workspace = mkCraneExample "checks/workspace";
-  crane-workspace-git = mkCraneExample "checks/workspace-git";
-  crane-workspace-hack = mkCraneExample "checks/workspace-hack";
-  crane-workspace-inheritance = mkCraneExample "checks/workspace-inheritance";
-  crane-workspace-not-at-root = mkCraneExample "checks/workspace-not-at-root/workspace";
-  crane-workspace-root = mkCraneExample "checks/workspace-root";
+  # crane-proc-macro = mkCraneExample {crate = "proc-macro";};
+  crane-simple = mkCraneExample {crate = "simple";};
+  crane-simple-git = mkCraneExample {crate = "simple-git";};
+  crane-simple-git-workspace-inheritance = mkCraneExample {crate = "simple-git-workspace-inheritance";};
+  crane-simple-no-deps = mkCraneExample {crate = "simple-no-deps";};
+  crane-simple-only-tests = mkCraneExample {crate = "simple-only-tests";};
+  crane-simple-with-audit-toml = mkCraneExample {crate = "simple-with-audit-toml";};
+  crane-simple-with-deny-toml = mkCraneExample {crate = "simple-with-deny-toml";};
+  crane-trunk = mkCraneExample {crate = "trunk";};
+  crane-various-targets = mkCraneExample {crate = "various-targets";};
+  crane-with-build-script = mkCraneExample {crate = "with-build-script";};
+  crane-with-build-script-custom = mkCraneExample {crate = "with-build-script-custom";};
+  crane-with-libs = mkCraneExample {crate = "with-libs";};
+  crane-with-libs-some-dep = mkCraneExample {crate = "with-libs/some-dep";};
+  crane-workspace = mkCraneExample {crate = "workspace";};
+  crane-workspace-git = mkCraneExample {crate = "workspace-git";};
+  crane-workspace-hack = mkCraneExample {crate = "workspace-hack";};
+  crane-workspace-inheritance = mkCraneExample {crate = "workspace-inheritance";};
+  crane-workspace-not-at-root = mkCraneExample {crate = "workspace-not-at-root/workspace";};
+  crane-workspace-root = mkCraneExample {crate = "workspace-root";};
 
   #
   # nocargo tests
   #
 
-  nocargo-build-deps = mkNocargoExample "build-deps";
-  nocargo-build-feature-env-vars = mkNocargoExample "build-feature-env-vars";
-  nocargo-cap-lints = mkNocargoExample "cap-lints";
-  nocargo-crate-names = mkNocargoExample "crate-names";
-  nocargo-custom-lib-name = mkNocargoExample "custom-lib-name";
-  nocargo-features = mkNocargoExample "features";
-  nocargo-libz-dynamic = mkNocargoExample "libz-dynamic";
-  nocargo-libz-static = mkNocargoExample "libz-static";
-  nocargo-lto-fat = mkNocargoExample "lto-fat";
-  nocargo-lto-proc-macro = mkNocargoExample "lto-proc-macro";
-  nocargo-lto-thin = mkNocargoExample "lto-thin";
-  nocargo-tokio-app = mkNocargoExample "tokio-app";
-  nocargo-workspace-inline = mkNocargoExample "workspace-inline";
-  nocargo-workspace-proc-macro-lto = mkNocargoExample "workspace-proc-macro-lto";
-  nocargo-workspace-virtual = mkNocargoExample "workspace-virtual";
+  nocargo-build-deps = mkNocargoExample {crate = "build-deps";};
+  nocargo-build-feature-env-vars = mkNocargoExample {crate = "build-feature-env-vars";};
+  nocargo-cap-lints = mkNocargoExample {crate = "cap-lints";};
+  nocargo-crate-names = mkNocargoExample {crate = "crate-names";};
+  nocargo-custom-lib-name = mkNocargoExample {crate = "custom-lib-name";};
+  nocargo-features = mkNocargoExample {crate = "features";};
+  nocargo-libz-dynamic = mkNocargoExample {crate = "libz-dynamic";};
+  nocargo-libz-static = mkNocargoExample {crate = "libz-static";};
+  nocargo-lto-fat = mkNocargoExample {crate = "lto-fat";};
+  nocargo-lto-proc-macro = mkNocargoExample {crate = "lto-proc-macro";};
+  nocargo-lto-thin = mkNocargoExample {crate = "lto-thin";};
+  nocargo-tokio-app = mkNocargoExample {crate = "tokio-app";};
+  nocargo-workspace-inline = mkNocargoExample {crate = "workspace-inline";};
+  nocargo-workspace-proc-macro-lto = mkNocargoExample {crate = "workspace-proc-macro-lto";};
+  nocargo-workspace-virtual = mkNocargoExample {crate = "workspace-virtual";};
 }
