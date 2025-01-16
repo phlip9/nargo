@@ -35,58 +35,58 @@
   };
 
   # ignore broken tests
-  ignored = [
+  ignored = {
     # TODO(phlip9): openssl-sys build.rs
-    "examples-crane-codesign-build"
-    "examples-gitoxide-build"
-    "examples-nushell-build"
+    examples-crane-codesign-build = null;
+    examples-gitoxide-build = null;
+    examples-nushell-build = null;
 
     # TODO(phlip9): openssl linking?
-    "examples-hickory-dns-build"
+    examples-hickory-dns-build = null;
 
     # TODO(phlip9): jemalloc-sys build.rs
-    "examples-fd-build"
+    examples-fd-build = null;
 
     # TODO(phlip9): grpcio-sys build.rs
-    "examples-crane-grpcio-test-build"
+    examples-crane-grpcio-test-build = null;
 
     # TODO(phlip9): linked panic runtime `panic_unwind` not compiled with
     # crate's panic strategy `abort`
-    "examples-pkg-targets-build"
+    examples-pkg-targets-build = null;
 
     # TODO(phlip9): support dep with Cargo.toml lib.name override
     # (ex: crate `new_debug_unreachable` uses `lib.name = "debug_unreachable"`)
-    "examples-nocargo-crate-names-build"
-    "examples-nocargo-custom-lib-name-build"
-    "examples-starlark-rust-build"
+    examples-nocargo-crate-names-build = null;
+    examples-nocargo-custom-lib-name-build = null;
+    examples-starlark-rust-build = null;
 
     # TODO(phlip9): build.rs `CARGO_MANIFEST_LINKS` is unset
-    "examples-wasmtime-build"
+    examples-wasmtime-build = null;
 
     # TODO(phlip9): examples with custom target selection
-    "examples-crane-dependencyBuildScriptPerms-build"
-    "examples-crane-simple-only-tests-build"
-    "examples-crane-with-libs-build"
-    "examples-crane-with-libs-some-dep-build"
-    "examples-crane-workspace-git-build"
-    "examples-nocargo-workspace-proc-macro-lto-build"
-    "examples-rand-build"
+    examples-crane-dependencyBuildScriptPerms-build = null;
+    examples-crane-simple-only-tests-build = null;
+    examples-crane-with-libs-build = null;
+    examples-crane-with-libs-some-dep-build = null;
+    examples-crane-workspace-git-build = null;
+    examples-nocargo-workspace-proc-macro-lto-build = null;
+    examples-rand-build = null;
 
     # TODO(phlip9): build.rs trying to write to `$src/target` dir
-    "examples-crane-with-build-script-build"
-    "examples-crane-with-build-script-custom-build"
-    "examples-rage-build"
+    examples-crane-with-build-script-build = null;
+    examples-crane-with-build-script-custom-build = null;
+    examples-rage-build = null;
 
     # TODO(phlip9): build.rs cargo::rustc-link-{lib,search} propagation
-    "examples-nocargo-libz-dynamic-build"
+    examples-nocargo-libz-dynamic-build = null;
 
     # TODO(phlip9): build.rs `DEP_Z_INCLUDE` env missing
-    "examples-nocargo-libz-static-build"
+    examples-nocargo-libz-static-build = null;
 
     # TODO(phlip9): build.rs cmake + bindgen
-    "examples-crane-highs-sys-test-build"
-  ];
-  checksFlat = builtins.removeAttrs (builtins.listToAttrs checks._tests) ignored;
+    examples-crane-highs-sys-test-build = null;
+  };
+  checksFlat = builtins.listToAttrs checks._tests;
 
   # circumvent garnix's max 100-top-level-packages limit by making a giant
   # symlink join over all checks, so they only count as one "package".
@@ -98,12 +98,15 @@
     then
       (value
         // {
-          _tests = [
-            {
-              name = prefix;
-              value = value;
-            }
-          ];
+          _tests =
+            if ignored ? ${prefix}
+            then []
+            else [
+              {
+                name = prefix;
+                value = value;
+              }
+            ];
         })
     # case: assertion
     else if lib.isType "assertion" value
