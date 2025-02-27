@@ -249,6 +249,7 @@ in {
         cp $src_raw/Cargo.lock.msrv $out/Cargo.lock
       '';
     lib = true;
+    bins = false;
   };
 
   #

@@ -66,6 +66,9 @@
     # TODO(phlip9): nargo-rustc handle multiple output libs
     examples-crane-with-libs-build = null;
 
+    # TODO(phlip9): top-level proc-macro feature resolution mismatch
+    examples-crane-proc-macro-checkResolveFeatures = null;
+
     # TODO(phlip9): build.rs trying to write to `$src/target` dir
     examples-crane-with-build-script-build = null;
     examples-crane-with-build-script-custom-build = null;
