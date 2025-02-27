@@ -50,14 +50,19 @@
     packages = eachSystem (
       system: let
         nargoLib = systemNargoLib.${system};
-      in {
-        # smuggle this in via `packages` to get garnix to build it
         garnix-check-shards = self.tests.${system}.garnix-check-shards;
-
-        nargo-metadata = nargoLib.nargo-metadata;
-        nargo-resolve = nargoLib.nargo-resolve;
-        nargo-rustc = nargoLib.nargo-rustc;
-      }
+      in
+        {
+          nargo-metadata = nargoLib.nargo-metadata;
+          nargo-resolve = nargoLib.nargo-resolve;
+          nargo-rustc = nargoLib.nargo-rustc;
+        }
+        //
+        # Smuggle these in via `packages.<system>` to get garnix to build them.
+        # These must be in top-level packages because garnix doesn't support:
+        # 1. "attribute matchers" deeper than 3 levels
+        # 2. building from non-standard flake outputs (?)
+        garnix-check-shards
     );
 
     devShells = eachSystem (
