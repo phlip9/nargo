@@ -36,6 +36,10 @@
 
   # ignore broken tests
   ignored = {
+    # TODO(phlip9): cross compilation
+    examples-cross-checkResolveFeatures = null;
+    examples-cross-build = null;
+
     # TODO(phlip9): openssl-sys build.rs
     examples-crane-codesign-build = null;
     examples-gitoxide-build = null;

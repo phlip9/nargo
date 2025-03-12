@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = [
+    "top-level",
+    "build-dep",
+]
+default-members = [
+    "top-level",
+]
+
+[workspace.package]
+authors = [
+    "Philip Kannegaard Hayes <philiphayes9@gmail.com>",
+]
+edition = "2021"

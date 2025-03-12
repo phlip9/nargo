@@ -1,0 +1,10 @@
+[package]
+name = "top-level"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+
+[target.x86_64-unknown-linux-gnu.build-dependencies]
+build-dep = { path = "../build-dep" }

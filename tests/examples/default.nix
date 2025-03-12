@@ -38,7 +38,7 @@
     metadata = fixupMetadataIFDPathContext metadataNoCtx metadataDrv;
 
     buildTarget = pkgs.buildPlatform.rust.rustcTarget;
-    hostTarget = "x86_64-unknown-linux-gnu";
+    hostTarget = args.hostTarget or buildTarget;
 
     resolved = nargoLib.resolve.resolveFeatures {
       inherit metadata buildTarget hostTarget;
@@ -212,6 +212,10 @@ in {
   dependency-v3 = mkLocalExample {src = ./dependency-v3;};
   hello-world-bin = mkLocalExample {src = ./hello-world-bin;};
   pkg-targets = mkLocalExample {src = ./pkg-targets;};
+  cross = mkLocalExample {
+    src = ./cross;
+    hostTarget = "x86_64-unknown-linux-musl";
+  };
 
   #
   # nixpkgs rust packages

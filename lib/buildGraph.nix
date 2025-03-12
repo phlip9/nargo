@@ -262,12 +262,13 @@
   # little more granularity than just vendoring the whole package workspace path
   # so we can handle workspaces with a top-level root package.
   #
-  # NOTE: filtering only works with local paths. this does no filtering nothing
-  # on e.g. a src from a derivation.
+  # NOTE: filtering only works with local paths. this does no filtering on e.g.
+  # a src from a derivation.
   _srcForWorkspacePkg = workspacePath: pkgWorkspaceRelPath: let
     pkgWorkspacePath = workspacePath + "/${pkgWorkspaceRelPath}";
 
     CargoToml = pkgWorkspacePath + "/Cargo.toml";
+    buildrs = pkgWorkspacePath + "/build.rs";
     src = pkgWorkspacePath + "/src";
     benches = pkgWorkspacePath + "/benches";
     examples = pkgWorkspacePath + "/examples";
@@ -281,6 +282,7 @@
         fileset = lib.fileset.unions [
           CargoToml
           src
+          (lib.fileset.maybeMissing buildrs)
           (lib.fileset.maybeMissing benches)
           (lib.fileset.maybeMissing examples)
           (lib.fileset.maybeMissing tests)
