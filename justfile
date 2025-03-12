@@ -26,8 +26,9 @@ nargo-resolve-workspace:
         --host-target x86_64-unknown-linux-gnu \
         --workspace-root $(pwd)
 
-resolve-features:
-    nix eval -f . --json packages.x86_64-linux.nargo-metadata.resolved
+resolve-features buildTarget="x86_64-unknown-linux-gnu" hostTarget="x86_64-unknown-linux-gnu":
+    nix eval -f . --json \
+        tests.currentSystem.resolve.{{ buildTarget }}.{{ hostTarget }}
 
 # Emit `cargo build --unit-graph` for local workspace
 cargo-unit-graph:
@@ -109,12 +110,15 @@ nix-current-system:
     @nix eval --raw --impure --expr builtins.currentSystem
 
 nix-fast-build *args:
-    nix develop .#nix-test --command \
+    nix develop --offline .#nix-test --command \
       nix-fast-build {{ args }}
 
-nix-test *args:
-    just nix-fast-build --no-link --skip-cached \
+nix-test-flake *args:
+    just nix-fast-build --no-link \
         --flake .#checks.$(just nix-current-system) {{ args }}
+
+nix-test *args:
+    nix build --offline --no-link --show-trace -L -f . checks.currentSystem {{ args }}
 
 # nix-test-ci:
 #     # disable nix output monitor (nom) for CI-friendly output
