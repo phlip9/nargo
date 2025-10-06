@@ -92,7 +92,9 @@ pub fn run(args: Args<'_>) {
             }
         };
         if prev_output_bytes != output_bytes {
-            panic!("check: new Cargo.metadata.json doesn't match current Cargo.metadata.json");
+            panic!(
+                "check: new Cargo.metadata.json doesn't match current Cargo.metadata.json"
+            );
         }
     }
 }

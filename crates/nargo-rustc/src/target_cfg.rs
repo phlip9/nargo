@@ -24,7 +24,9 @@ impl RustcTargetCfg {
 
         if !output.status.success() {
             let code = output.status.code().unwrap_or(1);
-            panic!("`rustc --target {target} --print cfg` exited with non-zero exit code: {code}");
+            panic!(
+                "`rustc --target {target} --print cfg` exited with non-zero exit code: {code}"
+            );
         }
 
         let output = String::from_utf8(output.stdout)

@@ -36,12 +36,8 @@ macro_rules! time_inner {
         let _timer = $crate::timer::Timer::new($lvl, $label);
         $b
     }};
-    ($lvl:expr, $label:expr, $e:expr $(,)?) => {{
-        $crate::time_inner!($lvl, $label, { $e })
-    }};
-    ($lvl:expr, $e:expr) => {{
-        $crate::time_inner!($lvl, ::std::stringify!($e), { $e })
-    }};
+    ($lvl:expr, $label:expr, $e:expr $(,)?) => {{ $crate::time_inner!($lvl, $label, { $e }) }};
+    ($lvl:expr, $e:expr) => {{ $crate::time_inner!($lvl, ::std::stringify!($e), { $e }) }};
 }
 
 #[macro_export]

@@ -566,7 +566,9 @@ impl<'a> BuildContext<'a> {
 
         if !status.success() {
             let code = status.code().unwrap_or(1);
-            panic!("`$out/build_script_build` exited with non-zero exit code: {code}");
+            panic!(
+                "`$out/build_script_build` exited with non-zero exit code: {code}"
+            );
         }
 
         // TODO(phlip9): we should probably filter the stdout to only useful

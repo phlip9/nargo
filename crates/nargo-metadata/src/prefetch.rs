@@ -36,24 +36,27 @@ pub fn prefetch(output: &mut output::Metadata<'_>) {
     let needs_prefetch = Mutex::new(needs_prefetch);
     thread::scope(|s| {
         for _ in 0..num_threads {
-            s.spawn(|| loop {
-                // Grab a package that we need to prefetch
-                let (pkg_id, pkg) = match needs_prefetch.lock().unwrap().pop() {
-                    Some(x) => x,
-                    None => return,
-                };
+            s.spawn(|| {
+                loop {
+                    // Grab a package that we need to prefetch
+                    let (pkg_id, pkg) =
+                        match needs_prefetch.lock().unwrap().pop() {
+                            Some(x) => x,
+                            None => return,
+                        };
 
-                let out = nix_store_prefetch_file(&nix, pkg)
-                    .with_context(|| pkg_id.to_string())
-                    .expect("Failed to prefetch crate");
+                    let out = nix_store_prefetch_file(&nix, pkg)
+                        .with_context(|| pkg_id.to_string())
+                        .expect("Failed to prefetch crate");
 
-                let hash = out.hash;
-                info!("prefetch: {pkg_id} -> \"{hash}\"");
+                    let hash = out.hash;
+                    info!("prefetch: {pkg_id} -> \"{hash}\"");
 
-                pkg.hash = Some(output::SriHash(Cow::Owned(hash)));
+                    pkg.hash = Some(output::SriHash(Cow::Owned(hash)));
 
-                // flush thead-local log buffer
-                logger::flush();
+                    // flush thead-local log buffer
+                    logger::flush();
+                }
             });
         }
     });

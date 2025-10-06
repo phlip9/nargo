@@ -1,4 +1,4 @@
-use assert_json_diff::{assert_json_matches_no_panic, CompareMode};
+use assert_json_diff::{CompareMode, assert_json_matches_no_panic};
 use nargo_core::time;
 
 use crate::{resolve::ResolveFeatures, unit_graph::UnitGraph};

@@ -333,12 +333,27 @@ mod test {
             assert_eq!(id_clean, Some(PkgId(expected)));
         }
 
-        ok("age", "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/age#0.10.0");
-        ok("age", "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/crates/age#0.10.0");
-        ok("dependencies", "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source#dependencies@0.0.0");
-        ok("dependencies", "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/other-path#dependencies@0.0.0");
-        ok("aes-gcm@0.10.3", "registry+https://github.com/rust-lang/crates.io-index#aes-gcm@0.10.3");
-        let id =  "git+http://github.com/dtolnay/semver?branch=master#a6425e6f41ddc81c6d6dd60c68248e0f0ef046c7";
+        ok(
+            "age",
+            "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/age#0.10.0",
+        );
+        ok(
+            "age",
+            "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/crates/age#0.10.0",
+        );
+        ok(
+            "dependencies",
+            "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source#dependencies@0.0.0",
+        );
+        ok(
+            "dependencies",
+            "path+file:///nix/store/6y9xxx3m6a1gs9807i2ywz9fhp6f8dm9-source/other-path#dependencies@0.0.0",
+        );
+        ok(
+            "aes-gcm@0.10.3",
+            "registry+https://github.com/rust-lang/crates.io-index#aes-gcm@0.10.3",
+        );
+        let id = "git+http://github.com/dtolnay/semver?branch=master#a6425e6f41ddc81c6d6dd60c68248e0f0ef046c7";
         ok(id, id);
     }
 

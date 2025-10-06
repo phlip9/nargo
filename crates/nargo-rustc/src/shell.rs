@@ -49,7 +49,9 @@ mod test {
     #[test]
     fn test_escape() {
         assert_eq!(
-            escape("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_=/,.+"),
+            escape(
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_=/,.+"
+            ),
             "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_=/,.+"
         );
         assert_eq!(escape("--aaa=bbb-ccc"), "--aaa=bbb-ccc");

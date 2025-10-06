@@ -233,7 +233,9 @@ impl<'a> Metadata<'a> {
                     .iter()
                     .any(|target| target.kind == TargetKind::Lib)
                 {
-                    panic!("invariant: {pkg_id} depends on {dep_pkg_id}, but {dep_pkg_id} doesn't have a `lib` target")
+                    panic!(
+                        "invariant: {pkg_id} depends on {dep_pkg_id}, but {dep_pkg_id} doesn't have a `lib` target"
+                    )
                 }
             }
         }
