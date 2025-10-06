@@ -57,29 +57,9 @@ cargo-build-plan:
         --release \
         -Z unstable-options
 
-cargo-metadata pkg:
-    nix build -f . tests.x86_64-linux.examples."{{ pkg }}".metadata
-    cat ./result \
-        | jq -S . \
-        | tee /dev/stderr \
-        > "{{ pkg }}.cargo-metadata.json"
-
-clean-cargo-metadata pkg:
-    jq --sort-keys -L ./tests/crater/jq-lib '\
-        import "lib" as lib; \
-        .packages | lib::cleanCargoMetadataPkgs' \
-        "{{ pkg }}.cargo-metadata.json"
-
-clean-workspace-manifests pkg:
-    jq --sort-keys -L ./tests/crater/jq-lib '\
-        import "lib" as lib; \
-        . | lib::cleanNocargoMetadataPkgs' \
-        "{{ pkg }}.workspace-manifests.json"
-
-diff-clean-metadata-manifests pkg:
-    diff --unified=10 --color=always \
-        <(just clean-cargo-metadata "{{ pkg }}") \
-        <(just clean-workspace-manifests "{{ pkg }}")
+nargo-metadata-example pkg:
+    nix build -f . tests.x86_64-linux.examples."{{ pkg }}".metadataDrv
+    cat result/Cargo.metadata.json
 
 # --- rust --- #
 

@@ -31,7 +31,7 @@ lib.makeScope nargoLib.newScope (self: {
   # workspace.
   generateCargoMetadata = self.callPackage ./generateCargoMetadata.nix {};
 
-  # Generate a `Cargo.build-plan.nix`.
+  # Generate a `Cargo.build-plan.raw.json`.
   generateCargoBuildPlan = self.callPackage ./generateCargoBuildPlan.nix {};
 
   # Minimal `pkgs.mkShellNoCC` for `nix develop`
