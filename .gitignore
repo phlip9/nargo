@@ -44,3 +44,6 @@ result-*
 
 # samply profiler output
 /profile*.json.gz
+
+# don't need this yet
+/.git-blame-ignore-revs
