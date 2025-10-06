@@ -117,6 +117,21 @@ nix-test-flake-update:
 nix-test *args:
     nix build --offline --no-link --show-trace -L -f . checks.currentSystem {{ args }}
 
+# list all (not-ignored) nix tests
+nix-test-list:
+    nix eval -f . checks.currentSystem --apply 'builtins.attrNames' --json \
+        | jq -r '.[]'
+
+# run a subset of nix tests matching a glob pattern
+nix-test-glob glob="":
+    just nix-test-list \
+        | while read test; do \
+            case "$test" in *{{ glob }}*) echo "$test";; esac; \
+          done \
+        | tee /dev/stderr \
+        | while read test; do echo "checks.currentSystem.$test"; done \
+        | xargs -r nix build --offline --no-link -L -f .
+
 # nix-test-ci:
 #     # disable nix output monitor (nom) for CI-friendly output
 #     just nix-test --no-nom
