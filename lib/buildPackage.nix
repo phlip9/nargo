@@ -24,9 +24,9 @@
   # # Compilation Options:
   #
   # TODO(phlip9): needs rework
-  buildTarget ? pkgsCross.buildPlatform.rustcTarget,
+  buildTarget ? pkgsCross.buildPlatform.rust.rustcTarget,
   buildPlatform ? pkgsCross.buildPlatform,
-  hostTarget ? pkgsCross.hostPlatform.rustcTarget,
+  hostTarget ? pkgsCross.hostPlatform.rust.rustcTarget,
   hostPlatform ? pkgsCross.hostPlatform,
   # A nixpkgs instance where
   # `pkgsBuildBuild` is for `buildPlatform` and

@@ -44,3 +44,6 @@ result-*
 
 # samply profiler output
 /profile*.json.gz
+
+# AIs
+/.claude

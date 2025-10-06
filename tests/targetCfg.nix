@@ -142,6 +142,14 @@ in {
 
     notUnix1 = test "x86_64-unknown-linux-gnu" "cfg(not(unix))" false;
     notUnix2 = test "aarch64-apple-darwin" "cfg(not(unix))" false;
+
+    targetA1 = test "x86_64-unknown-linux-gnu" "x86_64-unknown-linux-gnu" true;
+    targetA2 = test "x86_64-unknown-linux-gnu" "x86_64-unknown-linux-musl" false;
+    targetA3 = test "x86_64-unknown-linux-gnu" "aarch64-apple-darwin" false;
+
+    targetB1 = test "aarch64-apple-darwin" "x86_64-unknown-linux-gnu" false;
+    targetB2 = test "aarch64-apple-darwin" "x86_64-unknown-linux-musl" false;
+    targetB3 = test "aarch64-apple-darwin" "aarch64-apple-darwin" true;
   };
 
   platform-cfg-tests = {assertEq, ...}: let
@@ -164,6 +172,7 @@ in {
       assertEq got expect;
   in {
     attrs-x86_64-linux = assertEq (targetCfg.platformToCfgAttrs (elaborate "x86_64-unknown-linux-gnu")) {
+      target = "x86_64-unknown-linux-gnu";
       target_arch = "x86_64";
       target_endian = "little";
       target_env = "gnu";
@@ -177,6 +186,7 @@ in {
     };
 
     cfg-x86_64-linux = test "x86_64-unknown-linux-gnu" ''
+      target="x86_64-unknown-linux-gnu"
       target_arch="x86_64"
       target_endian="little"
       target_env="gnu"
@@ -196,6 +206,7 @@ in {
     '';
 
     cfg-aarch64-linux = test "aarch64-unknown-linux-gnu" ''
+      target="aarch64-unknown-linux-gnu"
       target_arch="aarch64"
       target_endian="little"
       target_env="gnu"

@@ -32,6 +32,8 @@ in rec {
   # https://doc.rust-lang.org/reference/conditional-compilation.html
   platformToCfgAttrs = platform:
     {
+      target = platform.rust.rustcTarget;
+
       # Arch info.
       # https://github.com/NixOS/nixpkgs/blob/c63d4270feed5eb6c578fe2d9398d3f6f2f96811/pkgs/build-support/rust/build-rust-crate/configure-crate.nix#L126
       target_arch = platformToTargetArch platform;
