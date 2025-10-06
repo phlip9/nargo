@@ -100,7 +100,9 @@ impl ArgsRaw {
         ];
 
         for env in REMOVE_ENVS {
-            std::env::remove_var(env);
+            unsafe {
+                std::env::remove_var(env);
+            }
         }
     }
 }

@@ -16,7 +16,7 @@ exclude = [
 authors = [
     "Philip Kannegaard Hayes <philiphayes9@gmail.com>",
 ]
-edition = "2021"
+edition = "2024"
 
 [workspace.dependencies]
 assert-json-diff = "2"

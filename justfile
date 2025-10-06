@@ -87,6 +87,8 @@ rust-lint *args:
     cargo clippy --workspace --all-targets {{ args }}
     cargo clippy -p nargo-rustc --bin nargo-rustc {{ args }}
     cargo clippy -p nargo-metadata --bin nargo-metadata {{ args }}
+    fd "Cargo.toml" tests/examples --maxdepth=2 --threads=6 --exec \
+        cargo clippy --all-targets --manifest-path {}
 
 rust-fmt:
     cargo fmt --all
@@ -99,7 +101,7 @@ rust-test *args:
 
 # regenerate the Cargo.lock files in all tests/examples
 rust-update-example-lockfiles:
-    fd "Cargo.toml" tests/examples --threads=6 --exec \
+    fd "Cargo.toml" tests/examples --maxdepth=2 --threads=6 --exec \
         cargo generate-lockfile --manifest-path {}
 
 # --- just --- #

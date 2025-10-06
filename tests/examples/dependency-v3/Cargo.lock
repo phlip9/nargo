@@ -7,8 +7,8 @@ name = "dependencies"
 version = "0.0.0"
 dependencies = [
  "semver 1.0.0",
- "semver 1.0.24 (registry+https://github.com/rust-lang/crates.io-index)",
- "semver 1.0.24 (git+http://github.com/dtolnay/semver?branch=master)",
+ "semver 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
+ "semver 1.0.27 (git+http://github.com/dtolnay/semver?branch=master)",
 ]
 
 [[package]]
@@ -18,11 +18,11 @@ source = "git+https://github.com/dtolnay/semver?tag=1.0.0#a2ce5777dcd455246e4650
 
 [[package]]
 name = "semver"
-version = "1.0.24"
+version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cb6eb87a131f756572d7fb904f6e7b68633f09cca868c5df1c4b8d1a694bbba"
+checksum = "d767eb0aabc880b29956c35734170f26ed551a859dbd361d140cdbeca61ab1e2"
 
 [[package]]
 name = "semver"
-version = "1.0.24"
-source = "git+http://github.com/dtolnay/semver?branch=master#6f4069dd66f437361631d076b4226dc540a08d12"
+version = "1.0.27"
+source = "git+http://github.com/dtolnay/semver?branch=master#4527d590945520b976c8e24b6691c11deb232a5d"
