@@ -5,7 +5,7 @@
 use std::borrow::Cow;
 
 /// Escape characters that may have special meaning in a POSIX shell.
-pub(crate) fn escape(s: &str) -> Cow<str> {
+pub(crate) fn escape(s: &str) -> Cow<'_, str> {
     if !s.is_empty() && !s.contains(non_whitelisted) {
         return Cow::Borrowed(s);
     }

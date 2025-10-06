@@ -155,8 +155,8 @@
   nocargoSrc = pkgs.fetchFromGitHub {
     owner = "oxalica";
     repo = "nocargo";
-    rev = "7fdb03e1be21411764271f2ec85187870f0a9428"; # 2024-01-08
-    hash = "sha256-ZgVnsJ/Pw51o2Zg+WS4pU4EC0zj526qxj/2IXxyDMiY=";
+    rev = "089f487c2c123454c8b9a381a99999b63c53d1d6"; # 2025-04-29
+    hash = "sha256-Cca7/uDRwfo4UnPhZX31+vQ7chKr9nJsMvwykGllDVA=";
   };
 
   mkNocargoExample = {crate, ...} @ args:

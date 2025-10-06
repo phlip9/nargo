@@ -579,7 +579,7 @@ impl<'a> BuildContext<'a> {
     ///
     /// TODO(phlip9): apparently nix builds can't hard link to other store paths
     /// (anymore?)? is this something I can get working again?
-    fn collect_transitive_deps(&self) -> BTreeMap<OsString, &Dep> {
+    fn collect_transitive_deps(&self) -> BTreeMap<OsString, &Dep<'_>> {
         let mut tdep_lib_filenames: BTreeMap<OsString, &Dep> = BTreeMap::new();
 
         // Nothing to collect
@@ -694,8 +694,7 @@ impl Target<'_> {
     }
 
     fn is_dylib(&self) -> bool {
-        self.is_lib()
-            && (self.crate_types.iter().any(|x| *x == CrateType::Dylib))
+        self.is_lib() && self.crate_types.contains(&CrateType::Dylib)
     }
 
     // // TODO(phlip9): -C prefer-dynamic
@@ -705,8 +704,7 @@ impl Target<'_> {
     // }
 
     fn is_proc_macro(&self) -> bool {
-        self.is_lib()
-            && self.crate_types.iter().any(|x| *x == CrateType::ProcMacro)
+        self.is_lib() && self.crate_types.contains(&CrateType::ProcMacro)
     }
 
     fn is_executable(&self) -> bool {

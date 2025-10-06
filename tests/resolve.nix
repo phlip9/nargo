@@ -20,7 +20,7 @@ in
             metadata = metadata;
             buildTarget = buildTarget;
             hostTarget = hostTarget;
-            rootPkgIds = ["nargo-metadata"];
+            # rootPkgIds = ["nargo-metadata"];
           };
         })
         hostTargets);

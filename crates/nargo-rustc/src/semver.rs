@@ -151,7 +151,7 @@ mod test {
         out
     }
 
-    fn version(s: &str) -> Version {
+    fn version(s: &str) -> Version<'_> {
         let version =
             Version::from_str(s).expect("this semver::Version should parse");
         assert_eq!(version.original, s);

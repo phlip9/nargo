@@ -1,6 +1,18 @@
 alias nm := nargo-metadata
+alias nt := nix-test
 alias rl := rust-lint
 alias rt := rust-test
+
+# locally run basic CI checks and all tests
+ci:
+    just bash-fmt-check
+    just bash-lint
+    just nix-fmt-check
+    just rust-fmt-check
+    just rust-lint -- -D warnings
+    just rust-test
+    just nargo-metadata-check
+    just nix-test
 
 # Generate `Cargo.metadata.json` file
 nargo-metadata *args:
@@ -116,6 +128,9 @@ nix-fast-build *args:
 nix-test-flake *args:
     just nix-fast-build --no-link \
         --flake .#checks.$(just nix-current-system) {{ args }}
+
+nix-test-flake-update:
+    nix flake update --flake ./tests/flake --commit-lock-file
 
 nix-test *args:
     nix build --offline --no-link --show-trace -L -f . checks.currentSystem {{ args }}
