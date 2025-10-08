@@ -67,8 +67,8 @@ rust-lint *args:
     cargo clippy --workspace --all-targets {{ args }}
     cargo clippy -p nargo-rustc --bin nargo-rustc {{ args }}
     cargo clippy -p nargo-metadata --bin nargo-metadata {{ args }}
-    fd "Cargo.toml" tests/examples --maxdepth=2 --threads=6 --exec \
-        cargo clippy --all-targets --manifest-path {}
+    find tests/examples -maxdepth 2 -name Cargo.toml -type f -exec \
+        cargo clippy --all-targets --manifest-path {} --target-dir ./target {{ args }} \;
 
 rust-fmt:
     cargo fmt --all
